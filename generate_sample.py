@@ -18,6 +18,9 @@ import string
 import sys
 from pathlib import Path
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 # ── Seeded RNG for reproducible but varied output ─────────────────────────────
 
 def make_rng(seed: int) -> random.Random:

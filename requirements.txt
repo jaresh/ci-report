@@ -1,2 +1,7 @@
 jinja2>=3.1.0
-anthropic>=0.20.0
+
+# Data source drivers — install whichever DBs you use:
+PyMySQL>=1.1.0             # datasources/tool_mysql.py  (primary)
+# mysql-connector-python>=8  # datasources/tool_mysql.py  (alternative to PyMySQL)
+clickhouse-driver>=0.2.9   # datasources/tool_clickhouse.py  (native TCP, port 9000)
+# clickhouse-connect>=0.7    # datasources/tool_clickhouse.py  (HTTP interface, port 8123)

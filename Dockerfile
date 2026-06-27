@@ -4,7 +4,9 @@
 #   docker build -t ci-report .
 #
 # Run (mount your project directory, pass credentials via env file):
-#   docker run --rm --env-file .env -v $(pwd):/workspace ci-report --junit-xml --metrics-json --jira --ai 1247
+#   docker run --rm --env-file .env -v $(pwd):/workspace ci-report --mysql --jira --ai 1247
+#   docker run --rm --env-file .env -v $(pwd):/workspace ci-report --clickhouse 1247
+#   docker run --rm --env-file .env -v $(pwd):/workspace ci-report --mysql --clickhouse 1247
 #
 # Check credentials before a run:
 #   docker run --rm --env-file .env -v $(pwd):/workspace ci-report --check-credentials

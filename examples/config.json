@@ -23,22 +23,36 @@
     }
   },
 
-  "junit_xml": {
-    "report_glob":   "examples/junit_current.xml",
-    "history_dir":   "examples/junit_history/",
-    "history_limit": 7,
-    "scenario_jira": "PIPE-123",
-    "config_label":  "docker-arm64 · Linux · agent-01",
-    "jira_base_url": "https://jira.example.com/browse/",
-    "task_base_url": "https://ci.example.com/jobs/{build}/tasks/",
-    "log_base_url":  "https://ci.example.com/jobs/{build}/logs/"
+  "mysql": {
+    "_note":              "Full data source — always collects failures (test_runs) and performance (performance_metrics). Load fixture: mysql < examples/fixtures/mysql_schema.sql",
+    "host":               "localhost",
+    "port":               3306,
+    "database":           "ci_reports",
+    "user_env":           "MYSQL_USER",
+    "password_env":       "MYSQL_PASSWORD",
+    "build":              "{build}",
+    "ref_build":          "1244",
+    "history_limit":      7,
+    "perf_history_limit": 8,
+    "jira_base_url":      "https://jira.example.com/browse/",
+    "task_base_url":      "https://ci.example.com/jobs/{build}/tasks/",
+    "log_base_url":       "https://ci.example.com/jobs/{build}/logs/"
   },
 
-  "metrics_json": {
-    "files": [
-      "examples/metrics_arm64.json",
-      "examples/metrics_curl.json"
-    ]
+  "clickhouse": {
+    "_note":              "Full data source — always collects failures (test_runs) and performance (performance_metrics). Load fixture: clickhouse-client --multiquery < examples/fixtures/clickhouse_schema.sql",
+    "host":               "localhost",
+    "port":               9000,
+    "database":           "ci_metrics",
+    "user_env":           "CLICKHOUSE_USER",
+    "password_env":       "CLICKHOUSE_PASSWORD",
+    "build":              "{build}",
+    "ref_build":          "1244",
+    "history_limit":      7,
+    "perf_history_limit": 8,
+    "jira_base_url":      "https://jira.example.com/browse/",
+    "task_base_url":      "https://ci.example.com/jobs/{build}/tasks/",
+    "log_base_url":       "https://ci.example.com/jobs/{build}/logs/"
   },
 
   "jira": {

@@ -6,8 +6,8 @@
 #   make build
 #   make check
 #   make report BUILD=1247
-#   make report BUILD=1247 TOOLS="--junit-xml --metrics-json" FLAGS="--jira --ai"
-#   make report BUILD=1247 FLAGS="--junit-xml --ai" OUT="--out reports/1247.html"
+#   make report BUILD=1247 TOOLS="--mysql" FLAGS="--jira --ai"
+#   make report BUILD=1247 TOOLS="--mysql --clickhouse" OUT="--out reports/1247.html"
 # ─────────────────────────────────────────────────────────────────────────────
 
 IMAGE   ?= ci-report
@@ -16,7 +16,7 @@ VOL      = -v $(PWD):/workspace
 RUN      = docker run --rm --env-file $(ENVFILE) $(VOL) $(IMAGE)
 
 # Default tool selection (override on the command line)
-TOOLS   ?= --junit-xml --metrics-json
+TOOLS   ?= --mysql
 FLAGS   ?= --jira --ai
 OUT     ?=
 
@@ -35,7 +35,7 @@ check:
 
 ## Generate a report  (required: BUILD=<build-name>)
 ##   make report BUILD=1247
-##   make report BUILD=1247 TOOLS="--junit-xml" FLAGS="--ai"
+##   make report BUILD=1247 TOOLS="--mysql" FLAGS="--ai"
 report:
 ifndef BUILD
 	$(error BUILD is required: make report BUILD=1247)
@@ -50,7 +50,7 @@ help:
 	@echo "  make report BUILD=1247  Generate report for build 1247"
 	@echo ""
 	@echo "  Override defaults:"
-	@echo "    TOOLS=\"--junit-xml --metrics-json\"   which data tools to run"
+	@echo "    TOOLS=\"--mysql --clickhouse\"          which data source tools to run"
 	@echo "    FLAGS=\"--jira --ai\"                  which enrichment phases"
 	@echo "    OUT=\"--out path/report.html\"         output file location"
 	@echo "    IMAGE=ci-report                      Docker image name"

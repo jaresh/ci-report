@@ -1,0 +1,329 @@
+# GitHub Copilot Instructions — ci-report
+
+This file is loaded automatically by GitHub Copilot to provide project
+context and coding guidance. Follow these instructions for all suggestions
+and completions in this repository.
+
+---
+
+## Project overview
+
+**ci-report** generates a single-file HTML CI dashboard from database data
+sources. It reads test failure results and performance metrics from MySQL
+and/or ClickHouse, optionally enriches them with JIRA tickets and Claude AI
+analysis, then renders a Dracula-themed HTML report via Jinja2.
+
+```bash
+python generate_report.py --mysql --clickhouse --jira --ai 1247
+```
+
+The `1247` argument is the build name. It is substituted into every `{build}`
+placeholder in `config.json` before any collection begins.
+
+---
+
+## Key files
+
+| File | Purpose |
+|---|---|
+| `generate_report.py` | Main orchestrator, CLI, `prepare_data()`, `merge_results()` |
+| `datasources/base.py` | `DataSource` ABC and `merge_results()` |
+| `datasources/tool_mysql.py` | MySQL / MariaDB full data source |
+| `datasources/tool_clickhouse.py` | ClickHouse full data source |
+| `datasources/tool_template.py` | Scaffold — copy this to add a new tool |
+| `template.html` | Jinja2 template, Dracula theme, fully self-contained |
+| `tests/test_compute.py` | Unit tests for computation helpers |
+| `tests/test_tools.py` | Contract tests for tools and enrichment pipeline |
+| `examples/fixtures/` | SQL schemas + 8-build fixture data for both DBs |
+
+---
+
+## The DataSource pattern
+
+Every tool subclasses `DataSource` from `datasources/base.py` and implements:
+
+```python
+class MySQLSource(DataSource):
+
+    @property
+    def name(self) -> str:
+        return "mysql"           # matches TOOLS key and config.json section
+
+    def collect(self, config: dict) -> dict:
+        ...
+        return {
+            "failures":    [...],   # always return both
+            "performance": [...],   # even if empty
+        }
+```
+
+Tools are registered in `generate_report.py`:
+
+```python
+TOOLS: dict = {
+    "mysql":      MySQLSource(),
+    "clickhouse": ClickHouseSource(),
+}
+```
+
+`argparse` auto-generates `--mysql` and `--clickhouse` CLI flags from these keys.
+Tools run in parallel via `ThreadPoolExecutor`.
+
+---
+
+## collect() output — required JSON shape
+
+`collect()` must return this exact structure. The Jinja2 template and
+`prepare_data()` depend on every key listed here.
+
+### failures
+
+```python
+[
+  {
+    "scenario":  str,         # test suite name
+    "config":    str,         # environment / agent label
+    "jira":      str,         # "PROJ-123" or ""
+    "jira_url":  str,         # full URL or "#"
+    "test_cases": [
+      {
+        "name":            str,
+        "status":          str,   # MUST be "fail" | "error" | "timeout"
+        "duration":        str,   # "18.1s" | "3m 12s" | "—"
+        "failure_message": str,
+        "failure_text":    str,
+        "jira":            str,
+        "jira_url":        str,
+        "task_url":        str,
+        "log_url":         str,
+        "history": [
+          {"build": str, "status": str, "duration": str},
+          # last entry MUST have "current": True
+        ],
+        "ai_analysis": {},        # always a dict — AI phase fills it in
+      }
+    ]
+  }
+]
+```
+
+### performance
+
+```python
+[
+  {
+    "model":         str,     # display name — discovered from DB, not config
+    "summary_note":  str,     # footer text or ""
+    "summary_chips": None,    # None = auto-derive; or list of chip dicts
+    "metrics": [
+      {
+        "name":           str,
+        "unit":           str,
+        "direction":      str,   # MUST be "higher_better" | "lower_better"
+        "current":        float,
+        "reference":      float,
+        "history_values": [float, ...],
+        "history_builds": [str, ...],   # MUST be same length as history_values
+      }
+    ]
+  }
+]
+```
+
+### Hard rules
+
+- `history_values` and `history_builds` must always be the same length.
+- `direction` must be exactly `"higher_better"` or `"lower_better"`.
+- `status` must be exactly `"fail"`, `"error"`, or `"timeout"`.
+- `ai_analysis` must always be a `dict` — never `None`.
+- The last `history` entry must always have `"current": True`.
+- `collect()` must **never raise** — catch everything, log it, return `{}`.
+
+---
+
+## SQL conventions
+
+Use `%s` placeholders in all SQL. The ClickHouse `_execute()` adapter
+converts `%s` → `{_p0}`, `{_p1}`, … for clickhouse-connect automatically —
+tools never need to do this themselves.
+
+```python
+# Correct — one %s per parameter, positional
+rows = self._query(conn, "SELECT * FROM t WHERE build = %s", (build,))
+
+# Wrong — string formatting opens SQL injection
+rows = self._query(conn, f"SELECT * FROM t WHERE build = '{build}'")
+```
+
+**Always batch history queries.** One `IN (…)` query for all failing test
+names; never one query per test:
+
+```python
+# Correct — one query for N tests
+ph   = ', '.join(['%s'] * len(names))
+sql  = f"SELECT ... FROM test_runs WHERE name IN ({ph}) AND build != %s"
+rows = self._query(conn, sql, list(names) + [build])
+
+# Wrong — N+1 queries
+for name in names:
+    rows = self._query(conn, "SELECT ... WHERE name = %s", (name,))
+```
+
+---
+
+## Database helpers
+
+### MySQL
+
+```python
+# _connect() tries PyMySQL first, then mysql-connector-python
+conn, driver = self._connect(host, port, database, user, password)
+# _query() handles both drivers transparently
+rows = self._query((conn, driver), sql, params)
+```
+
+### ClickHouse
+
+```python
+# _connect() tries clickhouse-driver (TCP 9000) first, then clickhouse-connect (HTTP 8123)
+client, driver = self._connect(host, port, database, user, password)
+# _execute() handles both drivers and converts %s params for clickhouse-connect
+rows = self._execute(client, driver, sql, [build])
+```
+
+---
+
+## Coding style
+
+- Python 3.11+. Use `from __future__ import annotations` in all source files.
+- Type hints on all function signatures. Use built-in generics: `list[str]`,
+  `dict[str, int]` — not `typing.List`, `typing.Dict`.
+- No bare `except:`. Catch the narrowest exception or `Exception` with a log.
+- No `print()` in `datasources/` or enricher modules — use
+  `logging.getLogger(__name__)`.
+- `generate_report.py` and `generate_sample.py` may use `print()` for
+  user-facing progress. Always call
+  `sys.stdout.reconfigure(encoding="utf-8", errors="replace")` near the top
+  for Windows terminal compatibility.
+- SQL constants: `_UPPER_SNAKE_SQL` at module level.
+- Private helpers: `_lower_snake()` at module level.
+- Do not shadow the `config` dict parameter — use `config_label` for loop
+  variables unpacking DB `config` column values.
+
+### Comments
+
+Write comments only when the *why* is non-obvious. Do not describe what the
+code does; well-named identifiers already do that. Do not reference issue
+numbers or task names in comments.
+
+---
+
+## Adding a new data source tool
+
+1. Copy `datasources/tool_template.py` → `datasources/tool_<name>.py`
+2. Implement `name`, `description`, `collect()`
+3. Register in `generate_report.py`:
+   ```python
+   from datasources.tool_<name> import <Name>Source
+   TOOLS["<name>"] = <Name>Source()
+   ```
+4. Add `"<name>": { ... }` block to `examples/config.json`
+5. Add fixture SQL to `examples/fixtures/<name>_schema.sql`
+6. Add contract tests to `tests/test_tools.py` (see below)
+7. Update `README.md` — project structure, CLI reference, DB tools section
+
+---
+
+## Testing
+
+### Run tests
+
+```bash
+pytest tests/ -v --tb=short
+```
+
+All tests must pass before committing. Current count: 173 tests, ~0.6 s.
+
+### Test structure
+
+| File | What it covers |
+|---|---|
+| `tests/test_compute.py` | `normalize_heights`, `compute_delta`, `history_summary`, `validate_merged`, `resolve_build`, JIRA term extraction |
+| `tests/test_tools.py` | Helper functions, `_build_performance`, `merge_results`, full `collect()` contract for both tools, `_execute` adapter, `prepare_data` pipeline |
+
+### Contract tests pattern
+
+Mock at the `_query` / `_execute` level — never at the connection level.
+This keeps the data-transformation logic under test:
+
+```python
+def _mysql_query_router(conn_pair, sql, params=()):
+    if "performance_metrics" in sql:
+        return PERF_ROWS
+    if "build !=" in sql:
+        return HISTORY_ROWS
+    return FAILURE_ROWS
+
+class TestMyNewSourceContract:
+
+    def _collect(self):
+        src = MyNewSource()
+        with patch.object(MyNewSource, "_connect", return_value=(MagicMock(), "driver")), \
+             patch.object(MyNewSource, "_query", side_effect=_mysql_query_router):
+            return src.collect({"database": "ci", "build": "1247"})
+
+    def test_always_returns_failures_and_performance_keys(self):
+        result = self._collect()
+        assert "failures" in result
+        assert "performance" in result
+
+    def test_metric_required_keys(self):
+        metric = self._collect()["performance"][0]["metrics"][0]
+        for key in ("name", "unit", "direction", "current", "reference",
+                    "history_values", "history_builds"):
+            assert key in metric
+
+    def test_history_values_and_builds_same_length(self):
+        for model in self._collect()["performance"]:
+            for m in model["metrics"]:
+                assert len(m["history_values"]) == len(m["history_builds"])
+
+    def test_missing_build_returns_empty(self):
+        src = MyNewSource()
+        with patch.object(MyNewSource, "_connect", return_value=(MagicMock(), "driver")):
+            assert src.collect({"database": "ci", "build": ""}) == {}
+
+    def test_connect_failure_returns_empty(self):
+        src = MyNewSource()
+        with patch.object(MyNewSource, "_connect", side_effect=RuntimeError("no driver")):
+            assert src.collect({"database": "ci", "build": "1247"}) == {}
+```
+
+### Non-regression checklist
+
+Before committing any change:
+
+- [ ] `pytest tests/ -v` — all tests pass
+- [ ] If `collect()` output shape changed → update contract tests
+- [ ] If `template.html` or `prepare_data()` changed →
+      `python generate_sample.py --out examples/sample_report.html` renders
+      without errors
+- [ ] If a tool, module, or config key was removed →
+      `grep -r "old_name" --include="*.py" --include="*.json" --include="*.md" .`
+      returns no matches
+
+---
+
+## What Copilot should not suggest
+
+- Do not add `models` as a config key — models are always discovered from
+  database data, never configured.
+- Do not add per-feature toggles to `collect()` — tools are full data source
+  providers; when enabled they always return both `failures` and `performance`.
+- Do not issue one DB query per test case for history — always batch with `IN`.
+- Do not use f-strings to build SQL — always use `%s` placeholders.
+- Do not add `print()` to `datasources/` modules — use `logging`.
+- Do not catch `Exception` silently without logging it.
+- Do not return `None` from `collect()` — return `{}` on error.
+- Do not hard-code build numbers, hostnames, or file paths in source files.
+- Do not add external CDN links to `template.html` — keep it self-contained.

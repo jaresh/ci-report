@@ -3,10 +3,10 @@
 generate_report.py — CI dashboard report generator.
 
 Usage:
-    # Collect with specific tools, then render  (build name is required)
-    python generate_report.py --junit-xml --metrics-json 1247
-    python generate_report.py --junit-xml --metrics-json --ai 1247
-    python generate_report.py --metrics-json 1247 --out perf_1247.html
+    # Collect from data sources, then render  (build name is required)
+    python generate_report.py --mysql 1247
+    python generate_report.py --clickhouse --ai 1247
+    python generate_report.py --mysql --clickhouse 1247 --out report_1247.html
 
     # Render only (pre-built data JSON, no collection, no AI)
     python generate_report.py data.json
@@ -28,6 +28,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from datetime import datetime
 
+# Windows terminals default to cp1252/cp1251 — force UTF-8 so Unicode
+# status symbols (✓ ✗ → ▲ ▼) print without errors.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 try:
     from jinja2 import Environment, FileSystemLoader
 except ImportError:
@@ -38,12 +43,12 @@ except ImportError:
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from datasources.tool_junit_xml    import JUnitXMLSource
-from datasources.tool_metrics_json import MetricsJSONSource
+from datasources.tool_mysql      import MySQLSource
+from datasources.tool_clickhouse import ClickHouseSource
 
 TOOLS: dict = {
-    "junit_xml":    JUnitXMLSource(),
-    "metrics_json": MetricsJSONSource(),
+    "mysql":      MySQLSource(),
+    "clickhouse": ClickHouseSource(),
 }
 
 
@@ -526,13 +531,11 @@ def run_pipeline(build: str, selected_tools: list[str], run_jira: bool,
     if run_ai:
         print("\nAI analysis phase…")
         from ai_analyser import AIAnalyser
-        ai_cfg = dict(config.get("ai", {}))
-        ai_cfg["enabled"] = True
 
         def _incremental_save(data):
             dump_path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
 
-        merged = AIAnalyser(ai_cfg).enrich(merged, save_fn=_incremental_save)
+        merged = AIAnalyser(config.get("ai", {})).enrich(merged, save_fn=_incremental_save)
         dump_path.write_text(json.dumps(merged, indent=2, ensure_ascii=False))
         print(f"  data (with AI) → {dump_path}")
     else:

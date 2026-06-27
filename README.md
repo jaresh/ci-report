@@ -45,17 +45,10 @@ cp .env.example .env
 
 ### 3 — Configure paths
 
-Copy the example config and edit it to point at your test results and metrics files.  
-Use `{build}` as a placeholder for the build name passed at runtime:
+Copy the example config and edit it to point at your database:
 
 ```bash
 cp examples/config.json config.json
-```
-
-```json
-"junit_xml": {
-  "report_glob": "results/{build}/*.xml"
-}
 ```
 
 ### 4 — Validate credentials
@@ -67,17 +60,17 @@ docker run --rm --env-file .env -v $(pwd):/workspace ci-report --check-credentia
 ### 5 — Generate a report
 
 ```bash
-# All tools + JIRA enrichment + AI analysis
+# MySQL data source + JIRA enrichment + AI analysis
 docker run --rm --env-file .env -v $(pwd):/workspace ci-report \
-  --junit-xml --metrics-json --jira --ai 1247
+  --mysql --jira --ai 1247
 
-# Failures only, no AI
+# ClickHouse data source only
 docker run --rm --env-file .env -v $(pwd):/workspace ci-report \
-  --junit-xml 1247
+  --clickhouse 1247
 
-# Performance only
+# Both data sources (e.g. different test frameworks in different DBs)
 docker run --rm --env-file .env -v $(pwd):/workspace ci-report \
-  --metrics-json 1247
+  --mysql --clickhouse 1247
 ```
 
 The report is written to `./1247.html` in your current directory.
@@ -88,7 +81,7 @@ The report is written to `./1247.html` in your current directory.
 make build            # build the image
 make check            # validate credentials
 make report BUILD=1247
-make report BUILD=1247 TOOLS="--junit-xml" FLAGS="--ai"
+make report BUILD=1247 TOOLS="--mysql" FLAGS="--ai"
 ```
 
 ---
@@ -103,7 +96,7 @@ make report BUILD=1247 TOOLS="--junit-xml" FLAGS="--ai"
 
 Use in CI:
 ```bash
-docker run ... ci-report --junit-xml --ai 1247
+docker run ... ci-report --mysql --ai 1247
 # The pipeline step fails if failures were found (exit 2)
 ```
 
@@ -131,22 +124,32 @@ All settings live in `config.json`. Use `{build}` in any string value as a place
     "badges": { "passed": 0, "skipped": 0, "metrics": 0 }
   },
 
-  "junit_xml": {
-    "report_glob":   "results/{build}/*.xml",
-    "history_dir":   "history/junit/",
+  "mysql": {
+    "host":          "localhost",
+    "port":          3306,
+    "database":      "ci_reports",
+    "user_env":      "MYSQL_USER",
+    "password_env":  "MYSQL_PASSWORD",
+    "build":         "{build}",
     "history_limit": 7,
-    "scenario_jira": "PROJ-100",
-    "config_label":  "docker-arm64 · Linux · agent-01",
     "jira_base_url": "https://org.atlassian.net/browse/",
     "task_base_url": "https://ci.example.com/jobs/{build}/tasks/",
     "log_base_url":  "https://ci.example.com/jobs/{build}/logs/"
   },
 
-  "metrics_json": {
-    "files": [
-      "metrics/{build}/arm64.json",
-      "metrics/{build}/curl.json"
-    ]
+  "clickhouse": {
+    "host":               "localhost",
+    "port":               9000,
+    "database":           "ci_metrics",
+    "user_env":           "CLICKHOUSE_USER",
+    "password_env":       "CLICKHOUSE_PASSWORD",
+    "build":              "{build}",
+    "ref_build":          "1244",
+    "history_limit":      7,
+    "perf_history_limit": 8,
+    "jira_base_url":      "https://org.atlassian.net/browse/",
+    "task_base_url":      "https://ci.example.com/jobs/{build}/tasks/",
+    "log_base_url":       "https://ci.example.com/jobs/{build}/logs/"
   },
 
   "jira": {
@@ -188,29 +191,32 @@ Plain text file injected into every AI prompt. Keep it current with your infrast
 - agent-01 re-provisioned 2024-01-14 — env vars may be missing
 ```
 
-### Metrics JSON file format
+### Database tools
 
-One file per performance model (agent/config combination):
+Each data source tool reads from a live database and always returns both test failures and performance metrics. They require an optional driver package:
 
-```json
-{
-  "model": "JFrog CLI 2.x · Linux arm64",
-  "summary_note": "Optional footer text",
-  "metrics": [
-    {
-      "name":      "Upload Throughput",
-      "unit":      "MB/s",
-      "direction": "higher_better",
-      "current":   87.3,
-      "reference": 82.9
-    }
-  ],
-  "history": {
-    "builds": ["1240", "1241", "1242", "1243", "1244", "1245", "1246", "1247"],
-    "Upload Throughput": [74.0, 77.1, 78.4, 79.2, 81.0, 83.3, 85.1, 87.3]
-  }
-}
+```bash
+pip install PyMySQL                # for --mysql
+pip install clickhouse-driver      # for --clickhouse
 ```
+
+Load the bundled fixture data to try the tools without a real CI database:
+
+```bash
+# MySQL
+mysql -u root < examples/fixtures/mysql_schema.sql
+
+# ClickHouse
+clickhouse-client --multiquery < examples/fixtures/clickhouse_schema.sql
+```
+
+Then run against build `1247` (the fixture's "current" build):
+
+```bash
+python generate_report.py --mysql --clickhouse 1247
+```
+
+Both tools expect `test_runs` and `performance_metrics` tables. Schemas and fixture data are in `examples/fixtures/`. Columns queried: see the tool docstrings in `datasources/tool_mysql.py` and `datasources/tool_clickhouse.py`.
 
 ---
 
@@ -221,8 +227,8 @@ python generate_report.py [--tool-flags] [--jira] [--ai] <build>
 python generate_report.py data.json          # render-only, no collection
 
 Options:
-  --junit-xml          Parse JUnit XML test reports
-  --metrics-json       Read structured metrics JSON files
+  --mysql              Read test failures and performance from MySQL / MariaDB
+  --clickhouse         Read test failures and performance from ClickHouse
   --jira               Enrich failures with related JIRA tickets
   --ai                 Run AI analysis on collected failures
   --check-credentials  Validate credentials in config.json and exit
@@ -314,8 +320,8 @@ template.html             Jinja2 HTML template (Dracula theme)
 
 datasources/
   base.py                 DataSource ABC + merge_results()
-  tool_junit_xml.py       JUnit XML parser
-  tool_metrics_json.py    Metrics JSON reader
+  tool_mysql.py           MySQL / MariaDB full data source (failures + performance)
+  tool_clickhouse.py      ClickHouse full data source (failures + performance)
   tool_template.py        Scaffold for new tools
 
 tests/
@@ -323,11 +329,13 @@ tests/
 
 examples/
   config.json             Example config (copy to root and customise)
+  example_run.json        Example run config for --config mode
   context.txt             Example AI context file
   example_data.json       Sample pre-collected report data
-  junit_current.xml       Sample JUnit XML output
-  metrics_arm64.json      Sample metrics JSON
   sample_report.html      Pre-rendered sample dashboard
+  fixtures/
+    mysql_schema.sql      MySQL schema + fixture data (8 builds, 2 scenarios, 2 perf models)
+    clickhouse_schema.sql ClickHouse schema + fixture data (8 builds, 2 scenarios, 2 perf models)
 
 Dockerfile                Container definition
 requirements.txt          Python dependencies

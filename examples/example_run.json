@@ -19,27 +19,39 @@
     "enabled": true,
     "tools": [
       {
-        "name":    "junit_xml",
+        "name":    "mysql",
         "enabled": true,
         "config": {
-          "report_glob":   "examples/junit_current.xml",
-          "history_dir":   "examples/junit_history/",
-          "history_limit": 7,
-          "scenario_jira": "PIPE-123",
-          "config_label":  "docker-arm64 · Linux · agent-01",
-          "jira_base_url": "https://jira.example.com/browse/",
-          "task_base_url": "https://ci.example.com/jobs/1247/tasks/",
-          "log_base_url":  "https://ci.example.com/jobs/1247/logs/"
+          "host":               "localhost",
+          "port":               3306,
+          "database":           "ci_reports",
+          "user_env":           "MYSQL_USER",
+          "password_env":       "MYSQL_PASSWORD",
+          "build":              "1247",
+          "ref_build":          "1244",
+          "history_limit":      7,
+          "perf_history_limit": 8,
+          "jira_base_url":      "https://jira.example.com/browse/",
+          "task_base_url":      "https://ci.example.com/jobs/1247/tasks/",
+          "log_base_url":       "https://ci.example.com/jobs/1247/logs/"
         }
       },
       {
-        "name":    "metrics_json",
+        "name":    "clickhouse",
         "enabled": true,
         "config": {
-          "files": [
-            "examples/metrics_arm64.json",
-            "examples/metrics_curl.json"
-          ]
+          "host":               "localhost",
+          "port":               9000,
+          "database":           "ci_metrics",
+          "user_env":           "CLICKHOUSE_USER",
+          "password_env":       "CLICKHOUSE_PASSWORD",
+          "build":              "1247",
+          "ref_build":          "1244",
+          "history_limit":      7,
+          "perf_history_limit": 8,
+          "jira_base_url":      "https://jira.example.com/browse/",
+          "task_base_url":      "https://ci.example.com/jobs/1247/tasks/",
+          "log_base_url":       "https://ci.example.com/jobs/1247/logs/"
         }
       }
     ]
