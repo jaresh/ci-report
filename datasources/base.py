@@ -12,12 +12,9 @@ To add a new tool:
 from __future__ import annotations
 
 import contextlib
-import logging
 import time
 from abc import ABC, abstractmethod
 from typing import NotRequired, Optional, TypedDict
-
-log = logging.getLogger(__name__)
 
 
 # ── Profiler ──────────────────────────────────────────────────────────────────

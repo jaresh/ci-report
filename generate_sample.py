@@ -14,7 +14,6 @@ Usage:
 import argparse
 import json
 import random
-import string
 import sys
 from pathlib import Path
 
@@ -453,8 +452,6 @@ PERF_MODELS = [
     },
 ]
 
-BUILD_HISTORY_RANGE = list(range(1240, 1248))   # 8 builds: 1240 → 1247
-
 
 # ── Generator ──────────────────────────────────────────────────────────────────
 
@@ -631,7 +628,6 @@ def main():
 
     try:
         from generate_report import prepare_data, _render_prepared
-        from pathlib import Path as P
         template = HERE / "template.html"
         if not template.exists():
             sys.exit(f"template.html not found in {HERE}")

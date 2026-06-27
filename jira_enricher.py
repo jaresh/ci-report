@@ -70,7 +70,6 @@ import os
 import re
 import sys
 import threading as _threading
-import time
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
