@@ -314,6 +314,102 @@ Before committing any change:
 
 ---
 
+## Profiling
+
+Every tool's `collect()` must record timing spans and include a `"profiling"` key in its return dict. The data flows into the `.data.json` file so agents can read it and identify bottlenecks.
+
+### Return shape
+
+```python
+return {
+    "failures":    [...],
+    "performance": [...],
+    "profiling": {
+        "tool":    self.name,          # str — tool key, e.g. "mysql"
+        "total_s": 4.20,              # float — full collect() wall time
+        "spans": {                    # dict — per-operation times in seconds
+            "connect_s":        0.12,
+            "failures_query_s": 0.84,
+            "history_query_s":  2.90,
+            "perf_query_s":     0.34,
+        },
+    },
+}
+```
+
+### Pattern to follow
+
+```python
+from .base import DataSource, Profiler
+import time
+
+def collect(self, config: dict) -> dict:
+    prof    = Profiler()
+    t_start = time.perf_counter()
+
+    with prof.span("connect_s"):
+        conn = self._connect(...)
+
+    failures    = self._collect_failures(conn, config, prof)
+    performance = self._collect_performance(conn, config, prof)
+
+    return {
+        "failures":    failures,
+        "performance": performance,
+        "profiling": {
+            "tool":    self.name,
+            "total_s": round(time.perf_counter() - t_start, 3),
+            "spans":   prof.to_dict(),
+        },
+    }
+
+def _collect_failures(self, conn, config: dict, prof: Profiler) -> list:
+    with prof.span("failures_query_s"):
+        rows = self._query(conn, _FAILURES_SQL, (build,))
+    with prof.span("history_query_s"):
+        hist = self._query(conn, hist_sql, params)
+    ...
+
+def _collect_performance(self, conn, config: dict, prof: Profiler) -> list:
+    with prof.span("perf_query_s"):
+        rows = self._query(conn, _PERF_SQL, ())
+    ...
+```
+
+### Rules
+
+- Always use `Profiler` from `datasources/base.py` — no ad-hoc timing dicts.
+- Span names: `lower_snake_case` ending in `_s`.
+- Pass `prof` as the last argument to every private helper that runs queries.
+- `collect()` must still return `{}` on error — never a partial dict.
+- Do not add profiling inside `merge_results()`.
+
+### Read-only DB access — optimisation constraints
+
+Production databases are **read-only**. Agents and Copilot suggestions must
+never propose schema changes. The only levers available are:
+
+1. **Query rewriting** — push filters into SQL to reduce rows transferred.
+   Assume the schema and indexes are fixed. Write queries that benefit from
+   whatever indexes already exist (inspect `examples/fixtures/` for the schema).
+2. **Config tuning** — lower `history_limit` or `perf_history_limit` in
+   `config.json` to request less data.
+3. **Python processing** — avoid redundant loops; never re-query data already
+   fetched in the same `collect()` call.
+
+When profiling shows a slow span, map it to one of the three levers. If the
+root cause is a missing index that can't be compensated by query rewriting,
+document the finding as a human-DBA recommendation — do not attempt to create it.
+
+| Span | Lever |
+|---|---|
+| `perf_query_s` high | Rewrite: add build-window subquery against `recorded_at` |
+| `history_query_s` high | Config: lower `history_limit`; or rewrite with date range if builds are numeric |
+| `failures_query_s` high | Rewrite: ensure `WHERE build = %s` can use an existing index |
+| `connect_s` high | Not fixable from code; document for ops team |
+
+---
+
 ## What Copilot should not suggest
 
 - Do not add `models` as a config key — models are always discovered from
@@ -324,6 +420,9 @@ Before committing any change:
 - Do not use f-strings to build SQL — always use `%s` placeholders.
 - Do not add `print()` to `datasources/` modules — use `logging`.
 - Do not catch `Exception` silently without logging it.
+- Do not suggest `CREATE INDEX`, `ALTER TABLE`, `ANALYZE TABLE`, or any DDL —
+  the agent has read-only access; all such suggestions must go to a human DBA.
+- Do not suggest writing query results to DB tables or creating views — read-only.
 - Do not return `None` from `collect()` — return `{}` on error.
 - Do not hard-code build numbers, hostnames, or file paths in source files.
 - Do not add external CDN links to `template.html` — keep it self-contained.

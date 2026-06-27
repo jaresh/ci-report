@@ -300,6 +300,21 @@ pip install pytest
 pytest tests/ -v
 ```
 
+#### Windows (no system Python on PATH)
+
+On Windows the Microsoft Store Python stub may be present but not functional. The project ships with `uv` support — use it to create an isolated environment and run tests:
+
+```powershell
+# One-time setup — create the virtual environment and install all dependencies
+& "$env:USERPROFILE\.local\bin\uv.exe" venv .venv
+& "$env:USERPROFILE\.local\bin\uv.exe" pip install -r requirements.txt pytest
+
+# Run tests
+.\.venv\Scripts\python.exe -m pytest tests/ -v --tb=short
+```
+
+`uv` is available at `~/.local/bin/uv.exe` after installing via the [uv installer](https://docs.astral.sh/uv/getting-started/installation/). The `.venv` directory is gitignored.
+
 ### Preview the report without real data
 
 ```bash

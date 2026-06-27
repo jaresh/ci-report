@@ -462,6 +462,27 @@ def check_credentials(config: dict) -> bool:
     return all_ok
 
 
+def _print_profiling_summary(profiling: dict) -> None:
+    """Print a compact timing table after the pipeline completes."""
+    total = profiling.get("pipeline_total_s", 0.0)
+    phases = profiling.get("phases", {})
+    tools  = profiling.get("tools", {})
+
+    print("\nProfiling summary")
+    print(f"  Pipeline total          {total:>6.3f}s")
+    for label, key in [("  Collection (wall)     ", "collection_s"),
+                        ("  JIRA enrichment       ", "jira_s"),
+                        ("  AI analysis           ", "ai_s"),
+                        ("  Render                ", "render_s")]:
+        s = phases.get(key, 0.0)
+        if s:
+            print(f"{label} {s:>6.3f}s")
+    for tool_name, tdata in tools.items():
+        print(f"  Tool: {tool_name:<18} {tdata.get('total_s', 0.0):>6.3f}s")
+        for span_name, span_s in tdata.get("spans", {}).items():
+            print(f"    {span_name:<24} {span_s:>6.3f}s")
+
+
 def run_pipeline(build: str, selected_tools: list[str], run_jira: bool,
                  run_ai: bool, config: dict, template_path: Path,
                  output_path: Path):
@@ -474,13 +495,16 @@ def run_pipeline(build: str, selected_tools: list[str], run_jira: bool,
     logging.basicConfig(level=logging.INFO,
                         format="%(levelname)-8s %(name)s — %(message)s")
 
+    pipeline_start = time.time()
+    phase_times: dict[str, float] = {}
+
     # ── Collect (parallel) ────────────────────────────────────────────────────
     tool_outputs: list[dict] = []
 
     if selected_tools:
         print(f"Collection phase  (build: {build})  [{len(selected_tools)} tool(s) in parallel]")
 
-        # Submit all tools concurrently; retry each independently
+        t0 = time.time()
         fut_map: dict = {}
         with ThreadPoolExecutor(max_workers=len(selected_tools)) as ex:
             for key in selected_tools:
@@ -488,18 +512,21 @@ def run_pipeline(build: str, selected_tools: list[str], run_jira: bool,
                     _collect_with_retry, TOOLS[key], config.get(key, {}), key
                 )
 
-        # Print results and collect in CLI-specified order (preserves merge order)
         for key in selected_tools:
             try:
                 out    = fut_map[key].result()
                 n_fail = sum(len(s.get("test_cases", [])) for s in out.get("failures", []))
                 n_perf = len(out.get("performance", []))
-                print(f"  ✓  {key}: {n_fail} failure(s), {n_perf} perf model(s)")
+                tool_s = out.get("profiling", {}).get("total_s", "")
+                timing = f"  {tool_s}s" if tool_s != "" else ""
+                print(f"  ✓  {key}: {n_fail} failure(s), {n_perf} perf model(s){timing}")
                 tool_outputs.append(out)
             except Exception as exc:
                 print(f"  ✗  {key}: {exc}")
+        phase_times["collection_s"] = round(time.time() - t0, 3)
     else:
         print("No collection tools selected — using base config data only")
+        phase_times["collection_s"] = 0.0
 
     base = dict(config.get("base", {}))
     base["number"] = build
@@ -520,30 +547,46 @@ def run_pipeline(build: str, selected_tools: list[str], run_jira: bool,
     # ── JIRA enrichment ───────────────────────────────────────────────────────
     if run_jira:
         print("\nJIRA enrichment phase…")
+        t0 = time.time()
         from jira_enricher import JiraEnricher
         merged = JiraEnricher(config.get("jira", {})).enrich(merged)
+        phase_times["jira_s"] = round(time.time() - t0, 3)
         dump_path.write_text(json.dumps(merged, indent=2, ensure_ascii=False))
         print(f"  data (with JIRA) → {dump_path}")
     else:
         print("\nJIRA enrichment phase: off")
+        phase_times["jira_s"] = 0.0
 
     # ── AI analysis ───────────────────────────────────────────────────────────
     if run_ai:
         print("\nAI analysis phase…")
+        t0 = time.time()
         from ai_analyser import AIAnalyser
 
         def _incremental_save(data):
             dump_path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
 
         merged = AIAnalyser(config.get("ai", {})).enrich(merged, save_fn=_incremental_save)
+        phase_times["ai_s"] = round(time.time() - t0, 3)
         dump_path.write_text(json.dumps(merged, indent=2, ensure_ascii=False))
         print(f"  data (with AI) → {dump_path}")
     else:
         print("\nAI analysis phase: off")
+        phase_times["ai_s"] = 0.0
 
     # ── Render ────────────────────────────────────────────────────────────────
     print()
+    t0 = time.time()
     _render_prepared(prepare_data(merged), template_path, output_path)
+    phase_times["render_s"] = round(time.time() - t0, 3)
+
+    # ── Finalise profiling ────────────────────────────────────────────────────
+    pipeline_total = round(time.time() - pipeline_start, 3)
+    merged["profiling"]["phases"]          = phase_times
+    merged["profiling"]["pipeline_total_s"] = pipeline_total
+    dump_path.write_text(json.dumps(merged, indent=2, ensure_ascii=False))
+
+    _print_profiling_summary(merged["profiling"])
 
     # Exit code 2 signals "report generated but test failures were found"
     # so CI pipelines can gate on it without parsing the HTML.

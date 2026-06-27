@@ -381,6 +381,134 @@ that mirrors `TestMySQLSourceContract` in structure and coverage.
 
 ---
 
+## Profiling
+
+Every `collect()` call records timing data and returns it under a `"profiling"` key alongside `"failures"` and `"performance"`. The profiling data is merged into the saved `.data.json` file and is available to agents on subsequent runs.
+
+### JSON shape
+
+```json
+"profiling": {
+  "pipeline_total_s": 12.34,
+  "phases": {
+    "collection_s": 8.10,
+    "jira_s": 2.40,
+    "ai_s": 1.80,
+    "render_s": 0.04
+  },
+  "tools": {
+    "mysql": {
+      "total_s": 4.20,
+      "spans": {
+        "connect_s":        0.12,
+        "failures_query_s": 0.84,
+        "history_query_s":  2.90,
+        "perf_query_s":     0.34
+      }
+    }
+  }
+}
+```
+
+### How tools record timings
+
+Each tool creates a `Profiler` (from `datasources/base.py`) at the start of `collect()` and wraps each operation with `prof.span("name_s")`:
+
+```python
+from .base import DataSource, Profiler
+import time
+
+def collect(self, config: dict) -> dict:
+    prof    = Profiler()
+    t_start = time.perf_counter()
+    with prof.span("connect_s"):
+        conn = self._connect(...)
+    failures    = self._collect_failures(conn, config, prof)
+    performance = self._collect_performance(conn, config, prof)
+    return {
+        "failures":    failures,
+        "performance": performance,
+        "profiling": {
+            "tool":    self.name,
+            "total_s": round(time.perf_counter() - t_start, 3),
+            "spans":   prof.to_dict(),
+        },
+    }
+```
+
+Pass `prof` to private helpers and wrap each query:
+
+```python
+def _collect_failures(self, conn, config: dict, prof: Profiler) -> list:
+    with prof.span("failures_query_s"):
+        rows = self._query(conn, _FAILURES_SQL, (build,))
+    with prof.span("history_query_s"):
+        hist = self._query(conn, hist_sql, params)
+```
+
+Standard span names (use these in every tool):
+
+| Span | Measures |
+|---|---|
+| `connect_s` | DB connection time |
+| `failures_query_s` | Main failures SELECT |
+| `history_query_s` | Batch history SELECT (typical bottleneck) |
+| `perf_query_s` | Performance metrics SELECT |
+
+Add further spans for any additional DB or API calls a tool makes.
+
+### Agent use of profiling data
+
+#### Access model — read-only databases
+
+Agents have **read-only** access to production databases. They cannot add indexes,
+create views, alter tables, or change any schema. All optimisations must come from
+one of these three levers:
+
+1. **Query rewriting** — push filters into SQL so fewer rows cross the network
+   (e.g. the `_PERF_SQL` build-window subquery). The DB schema and indexes are
+   fixed; write queries that benefit from existing indexes.
+2. **Config tuning** — lower `history_limit` or `perf_history_limit` in
+   `config.json` to reduce how much data is requested.
+3. **Python processing** — avoid redundant passes over data already in memory;
+   never re-query what was already fetched in the same `collect()` call.
+
+When the agent reads `profiling` from `<build>.data.json`, it should map each
+slow span to one of the three levers above — never to a schema change.
+
+#### Interpreting slow spans
+
+| Span | Likely cause | Agent's lever |
+|---|---|---|
+| `connect_s` > 0.3 s | Network latency to DB | Cannot fix; document for ops |
+| `failures_query_s` > 0.5 s | No index on `build` | Query rewriting only; no index creation |
+| `history_query_s` > 1 s | Many failing tests × many builds of history | Lower `history_limit` in config; or add a build-range `WHERE` clause if build numbers are numeric |
+| `perf_query_s` > 0.5 s | Full table scan (no `WHERE` on build) | Push build-window filter into SQL using a subquery against `recorded_at` |
+| `jira_s` > 2 s | Many tickets searched per failure | Set `"skip_if_present": true` in JIRA config |
+| `ai_s` > 5 s | Many unenriched failures | Set `"skip_if_present": true` in AI config |
+| `collection_s` ≈ slowest tool | Parallel tools; wall time = max, not sum | Optimise the slowest tool first |
+
+#### What the agent must NOT suggest
+
+- Adding or dropping indexes
+- Creating materialized views or summary tables
+- Changing table engine, partitioning, or charset
+- Granting write permissions to run `ANALYZE TABLE` or `OPTIMIZE TABLE`
+
+All of the above require DBA access that the agent does not have. If an index
+is missing and query rewriting cannot compensate, the agent should document the
+finding in the run log and recommend the index to a human DBA, not attempt to
+create it.
+
+### Rules when adding profiling to new tools
+
+- Always use `Profiler` from `datasources/base.py`.
+- Pass `prof` as the last argument to private helpers so sub-query spans are recorded.
+- Span names must end in `_s` and use `lower_snake_case`.
+- `collect()` must still return `{}` on error — never a partial dict with only `"profiling"`.
+
+---
+
 ## What never to do
 
 - **Do not break the JSON contract.** If a key is removed or renamed in

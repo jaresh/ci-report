@@ -1044,3 +1044,241 @@ class TestPrepareData:
         tc = result["failures"][0]["test_cases"][0]
         assert isinstance(tc["history_rate"], str)
         assert isinstance(tc["history_note"], str)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Profiler — unit tests for the timing recorder
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from datasources.base import Profiler
+
+
+class TestProfiler:
+
+    def test_span_records_elapsed_time(self):
+        prof = Profiler()
+        with prof.span("connect_s"):
+            pass
+        assert "connect_s" in prof.spans
+        assert isinstance(prof.spans["connect_s"], float)
+
+    def test_span_value_is_non_negative(self):
+        prof = Profiler()
+        with prof.span("query_s"):
+            pass
+        assert prof.spans["query_s"] >= 0.0
+
+    def test_multiple_spans_all_recorded(self):
+        prof = Profiler()
+        with prof.span("connect_s"):
+            pass
+        with prof.span("failures_query_s"):
+            pass
+        with prof.span("perf_query_s"):
+            pass
+        assert set(prof.spans) == {"connect_s", "failures_query_s", "perf_query_s"}
+
+    def test_to_dict_returns_copy(self):
+        prof = Profiler()
+        with prof.span("connect_s"):
+            pass
+        d = prof.to_dict()
+        assert isinstance(d, dict)
+        d["connect_s"] = 999.0          # mutating the copy must not affect the profiler
+        assert prof.spans["connect_s"] != 999.0
+
+    def test_span_value_is_rounded_to_three_decimals(self):
+        prof = Profiler()
+        with prof.span("x_s"):
+            pass
+        val = prof.spans["x_s"]
+        assert val == round(val, 3)
+
+    def test_empty_profiler_to_dict_is_empty(self):
+        assert Profiler().to_dict() == {}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Profiling — collect() output (MySQL and ClickHouse)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_MYSQL_CFG = {
+    "database": "ci_reports", "build": "1247", "ref_build": "1244",
+    "jira_base_url": "https://jira.example.com/browse/",
+}
+
+_CH_CFG = {
+    "database": "ci_metrics", "build": "1247", "ref_build": "1244",
+}
+
+
+def _mysql_collect(extra=None):
+    cfg = dict(_MYSQL_CFG)
+    if extra:
+        cfg.update(extra)
+    src = MySQLSource()
+    with patch.object(MySQLSource, "_connect", return_value=(MagicMock(), "pymysql")), \
+         patch.object(MySQLSource, "_query", side_effect=_mysql_query_router):
+        return src.collect(cfg)
+
+
+def _ch_collect(extra=None):
+    cfg = dict(_CH_CFG)
+    if extra:
+        cfg.update(extra)
+    src = ClickHouseSource()
+    with patch.object(ClickHouseSource, "_connect", return_value=(MagicMock(), "driver")), \
+         patch.object(ClickHouseSource, "_execute", side_effect=_ch_execute_router):
+        return src.collect(cfg)
+
+
+class TestMySQLProfiling:
+
+    def test_collect_returns_profiling_key(self):
+        assert "profiling" in _mysql_collect()
+
+    def test_profiling_has_required_keys(self):
+        prof = _mysql_collect()["profiling"]
+        for key in ("tool", "total_s", "spans"):
+            assert key in prof, f"profiling missing key: {key}"
+
+    def test_profiling_tool_name_is_mysql(self):
+        assert _mysql_collect()["profiling"]["tool"] == "mysql"
+
+    def test_total_s_is_non_negative_float(self):
+        total = _mysql_collect()["profiling"]["total_s"]
+        assert isinstance(total, float)
+        assert total >= 0.0
+
+    def test_standard_spans_are_present(self):
+        spans = _mysql_collect()["profiling"]["spans"]
+        for name in ("connect_s", "failures_query_s", "history_query_s", "perf_query_s"):
+            assert name in spans, f"span missing: {name}"
+
+    def test_all_span_values_are_non_negative_floats(self):
+        for name, val in _mysql_collect()["profiling"]["spans"].items():
+            assert isinstance(val, float), f"{name} is not float"
+            assert val >= 0.0, f"{name} is negative"
+
+    def test_connect_failure_returns_empty_no_profiling(self):
+        src = MySQLSource()
+        with patch.object(MySQLSource, "_connect", side_effect=RuntimeError("timeout")):
+            result = src.collect({"database": "ci", "build": "1247"})
+        assert result == {}
+
+    def test_missing_build_returns_empty_no_profiling(self):
+        src = MySQLSource()
+        with patch.object(MySQLSource, "_connect", return_value=(MagicMock(), "pymysql")):
+            result = src.collect({"database": "ci", "build": ""})
+        assert result == {}
+
+    def test_empty_db_still_has_profiling(self):
+        src = MySQLSource()
+        with patch.object(MySQLSource, "_connect", return_value=(MagicMock(), "pymysql")), \
+             patch.object(MySQLSource, "_query", return_value=[]):
+            result = src.collect(dict(_MYSQL_CFG))
+        assert "profiling" in result
+        assert "connect_s" in result["profiling"]["spans"]
+
+
+class TestClickHouseProfiling:
+
+    def test_collect_returns_profiling_key(self):
+        assert "profiling" in _ch_collect()
+
+    def test_profiling_has_required_keys(self):
+        prof = _ch_collect()["profiling"]
+        for key in ("tool", "total_s", "spans"):
+            assert key in prof
+
+    def test_profiling_tool_name_is_clickhouse(self):
+        assert _ch_collect()["profiling"]["tool"] == "clickhouse"
+
+    def test_total_s_is_non_negative_float(self):
+        total = _ch_collect()["profiling"]["total_s"]
+        assert isinstance(total, float)
+        assert total >= 0.0
+
+    def test_standard_spans_are_present(self):
+        spans = _ch_collect()["profiling"]["spans"]
+        for name in ("connect_s", "failures_query_s", "history_query_s", "perf_query_s"):
+            assert name in spans, f"span missing: {name}"
+
+    def test_all_span_values_are_non_negative_floats(self):
+        for name, val in _ch_collect()["profiling"]["spans"].items():
+            assert isinstance(val, float), f"{name} is not float"
+            assert val >= 0.0
+
+    def test_connect_failure_returns_empty_no_profiling(self):
+        src = ClickHouseSource()
+        with patch.object(ClickHouseSource, "_connect", side_effect=RuntimeError("timeout")):
+            result = src.collect({"database": "ci_metrics", "build": "1247"})
+        assert result == {}
+
+    def test_empty_db_still_has_profiling(self):
+        src = ClickHouseSource()
+        with patch.object(ClickHouseSource, "_connect", return_value=(MagicMock(), "driver")), \
+             patch.object(ClickHouseSource, "_execute", return_value=[]):
+            result = src.collect(dict(_CH_CFG))
+        assert "profiling" in result
+        assert "connect_s" in result["profiling"]["spans"]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# merge_results — profiling aggregation
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestMergeResultsProfiling:
+
+    _BASE = {"build": {"number": "1247"}}
+
+    def _tool_output(self, tool_name, total=1.23, spans=None):
+        return {
+            "failures":    [],
+            "performance": [],
+            "profiling": {
+                "tool":    tool_name,
+                "total_s": total,
+                "spans":   spans or {"connect_s": 0.1, "failures_query_s": 0.8},
+            },
+        }
+
+    def test_merge_always_has_profiling_key(self):
+        result = merge_results(self._BASE, [])
+        assert "profiling" in result
+
+    def test_merge_profiling_has_tools_key(self):
+        result = merge_results(self._BASE, [])
+        assert "tools" in result["profiling"]
+
+    def test_no_tools_gives_empty_tools_dict(self):
+        result = merge_results(self._BASE, [])
+        assert result["profiling"]["tools"] == {}
+
+    def test_single_tool_profiling_merged_by_name(self):
+        out = self._tool_output("mysql", total=4.2)
+        result = merge_results(self._BASE, [out])
+        assert "mysql" in result["profiling"]["tools"]
+        assert result["profiling"]["tools"]["mysql"]["total_s"] == 4.2
+
+    def test_multiple_tools_both_in_profiling(self):
+        m_out  = self._tool_output("mysql",      total=4.2)
+        ch_out = self._tool_output("clickhouse", total=7.8)
+        result = merge_results(self._BASE, [m_out, ch_out])
+        assert "mysql"      in result["profiling"]["tools"]
+        assert "clickhouse" in result["profiling"]["tools"]
+
+    def test_tool_spans_preserved(self):
+        spans = {"connect_s": 0.05, "failures_query_s": 1.2, "history_query_s": 3.0}
+        out = self._tool_output("mysql", spans=spans)
+        merged_spans = merge_results(self._BASE, [out])["profiling"]["tools"]["mysql"]["spans"]
+        assert merged_spans == spans
+
+    def test_tool_output_without_profiling_is_skipped_gracefully(self):
+        no_prof = {"failures": [], "performance": []}
+        result = merge_results(self._BASE, [no_prof])
+        assert result["profiling"]["tools"] == {}
+
+    def test_empty_tool_output_skipped(self):
+        result = merge_results(self._BASE, [{}, None])
+        assert result["profiling"]["tools"] == {}

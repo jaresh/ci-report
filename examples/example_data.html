@@ -1,0 +1,1361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build #1247 · CI Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══ DRACULA TOKENS ═══════════════════════════════════════════════════════════ */
+:root {
+  --bg:  #282a36; --sf0: #21222c; --sf1: #2d2f3f; --sf2: #44475a;
+  --bdr: rgba(98,114,164,.22); --bdr2: rgba(98,114,164,.42);
+  --green:  #50fa7b; --green-rgb:  80,250,123;
+  --red:    #ff5555; --red-rgb:    255,85,85;
+  --orange: #ffb86c; --orange-rgb: 255,184,108;
+  --purple: #bd93f9; --purple-rgb: 189,147,249;
+  --cyan:   #8be9fd; --cyan-rgb:   139,233,253;
+  --pink:   #ff79c6; --pink-rgb:   255,121,198;
+  --yellow: #f1fa8c;
+  --fg: #f8f8f2; --com: #6272a4; --com2: #3d4166;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Inter', system-ui, sans-serif;
+  --r: 5px;
+}
+/* ═══ RESET ════════════════════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 13px; line-height: 1.55; min-height: 100vh; }
+a { color: var(--cyan); text-decoration: none; border-bottom: 1px dashed rgba(139,233,253,.3); }
+#t1, #t2 { display: none; }
+/* ═══ KEYFRAMES ════════════════════════════════════════════════════════════════ */
+@keyframes fadeUp    { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+@keyframes shimmer   { 0% { background-position:-200% center; } 100% { background-position:200% center; } }
+@keyframes pulseDot  { 0%,100%{box-shadow:0 0 0 0 rgba(255,85,85,.7);}50%{box-shadow:0 0 0 7px rgba(255,85,85,0);} }
+@keyframes growH     { from { height:0; opacity:0; } to { height:var(--h); opacity:1; } }
+@keyframes slideDown { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important;}}
+/* ═══ LAYOUT ═══════════════════════════════════════════════════════════════════ */
+.shell { max-width: 1160px; margin: 0 auto; padding: 0 28px 80px; }
+/* ═══ HEADER ═══════════════════════════════════════════════════════════════════ */
+.hdr { position:relative; padding:30px 0 20px; background:var(--sf0); margin:0 -28px; padding-left:28px; padding-right:28px; border-bottom:1px solid var(--bdr); animation:fadeUp .5s ease both; }
+.hdr::after { content:''; position:absolute; bottom:-1px; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,rgba(189,147,249,.4) 40%,rgba(139,233,253,.35) 60%,transparent); background-size:300% auto; animation:shimmer 10s ease-in-out infinite alternate; }
+.hdr-top { display:flex; align-items:center; gap:14px; margin-bottom:10px; }
+.build-id { font-family:var(--mono); font-size:2.1rem; font-weight:700; color:var(--pink); letter-spacing:-2px; line-height:1; }
+.build-id sup { font-size:.8rem; opacity:.35; vertical-align:super; letter-spacing:0; }
+.hdr-meta { display:flex; flex-wrap:wrap; gap:4px 20px; font-family:var(--mono); font-size:.68rem; color:var(--com); margin-bottom:14px; }
+.hdr-meta span { display:flex; align-items:center; gap:5px; }
+.mlbl { font-size:.58rem; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--com2); }
+.build-id a { color:inherit; border-bottom:none; }
+.build-id a:hover { opacity:.75; }
+.hdr-meta a { color:inherit; border-bottom-color:rgba(139,233,253,.2); }
+.hdr-meta a:hover { color:var(--fg); }
+.hdr-badges { display:flex; gap:7px; flex-wrap:wrap; }
+.bdg { padding:2px 9px; border-radius:var(--r); font-family:var(--mono); font-size:.65rem; font-weight:700; }
+.bdg-p { background:rgba(var(--green-rgb),.1);  color:var(--green);  border:1px solid rgba(var(--green-rgb),.28); }
+.bdg-f { background:rgba(var(--red-rgb),.1);    color:var(--red);    border:1px solid rgba(var(--red-rgb),.28); }
+.bdg-s { background:rgba(var(--orange-rgb),.1); color:var(--orange); border:1px solid rgba(var(--orange-rgb),.22); }
+.bdg-m { background:rgba(var(--purple-rgb),.1); color:var(--purple); border:1px solid rgba(var(--purple-rgb),.2); }
+/* ═══ TABS ═════════════════════════════════════════════════════════════════════ */
+.tabs { display:flex; border-bottom:1px solid var(--bdr); margin:0 -28px; padding:0 28px; background:var(--sf0); }
+.tabs label { padding:12px 22px; cursor:pointer; user-select:none; font-size:.72rem; font-weight:500; letter-spacing:.07em; text-transform:uppercase; color:var(--com); border-bottom:2px solid transparent; margin-bottom:-1px; transition:color .15s,border-color .15s; }
+.tabs label:hover { color:var(--fg); }
+#t1:checked ~ .shell .tabs label[for="t1"],
+#t2:checked ~ .shell .tabs label[for="t2"] { color:var(--purple); border-bottom-color:var(--purple); }
+/* ═══ PANELS ════════════════════════════════════════════════════════════════════ */
+.panel { display:none; padding-top:24px; }
+#t1:checked ~ .shell #p1 { display:block; animation:fadeUp .35s ease both; }
+#t2:checked ~ .shell #p2 { display:block; animation:fadeUp .35s ease both; }
+/* ═══ TOOLTIP ═══════════════════════════════════════════════════════════════════ */
+[data-tip] { position:relative; }
+[data-tip]::after { content:attr(data-tip); position:absolute; bottom:calc(100% + 7px); left:50%; transform:translateX(-50%) translateY(4px); background:var(--sf0); color:var(--fg); border:1px solid var(--bdr2); border-radius:var(--r); padding:5px 10px; white-space:pre-line; font-family:var(--mono); font-size:.62rem; line-height:1.5; pointer-events:none; opacity:0; transition:opacity .15s,transform .15s; z-index:300; min-width:140px; text-align:center; }
+[data-tip]:hover::after { opacity:1; transform:translateX(-50%) translateY(0); }
+/* ════════════════════════════════════════════════════════════════════════════════
+   FAILURES TAB
+   ════════════════════════════════════════════════════════════════════════════════ */
+.sc-tbl-hdr { display:grid; grid-template-columns:22px 2fr 1fr 80px; gap:0 10px; padding:5px 12px; font-size:.58rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--com2); background:var(--sf0); border:1px solid var(--bdr); border-radius:var(--r) var(--r) 0 0; }
+details.sc-row { border-bottom:1px solid var(--bdr); animation:fadeUp .38s ease calc(var(--row,0)*.07s) both; }
+details.sc-row[open] { border-left:2px solid rgba(var(--purple-rgb),.5); }
+details.sc-row > summary { list-style:none; cursor:pointer; display:grid; grid-template-columns:22px 2fr 1fr 80px; gap:0 10px; padding:10px 12px; align-items:center; transition:background .1s; }
+details.sc-row > summary::-webkit-details-marker { display:none; }
+details.sc-row > summary:hover { background:var(--sf2); }
+.arr { font-family:var(--mono); font-size:1rem; color:var(--com); transition:transform .2s,color .2s; }
+details[open] > summary .arr { transform:rotate(90deg); color:var(--purple); }
+.sc-name { font-weight:500; font-size:.8rem; color:var(--fg); }
+.sc-cfg  { display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+.env-chip { font-family:var(--mono); font-size:.58rem; font-weight:500; padding:2px 7px; border-radius:3px; white-space:nowrap; }
+.env-chip.plat  { background:rgba(var(--cyan-rgb,139,233,253),.1);         color:var(--cyan); }
+.env-chip.os    { background:rgba(var(--purple-rgb,189,147,249),.12);       color:var(--purple); }
+.env-chip.agent { background:rgba(var(--orange-rgb,255,184,108),.12);       color:var(--orange); }
+.sc-stat { display:flex; gap:7px; font-family:var(--mono); font-size:.68rem; }
+.f { color:var(--red); } .p { color:var(--green); } .sk { color:var(--orange); }
+.tc-list { background:var(--sf0); border-top:1px solid var(--bdr); }
+details.sc-row[open] .tc-list { animation:slideDown .2s ease both; }
+.tc-list-hdr { display:grid; grid-template-columns:22px 2.5fr 90px 100px 70px; gap:0 10px; padding:5px 12px 5px 32px; font-size:.57rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--com2); border-bottom:1px solid var(--bdr); }
+details.tc-row { border-bottom:1px solid rgba(68,71,90,.6); }
+details.tc-row > summary { list-style:none; cursor:pointer; display:grid; grid-template-columns:22px 2.5fr 90px 100px 70px; gap:0 10px; padding:7px 12px 7px 32px; align-items:center; transition:background .1s; }
+details.tc-row > summary::-webkit-details-marker { display:none; }
+details.tc-row > summary:hover { background:var(--sf1); }
+.tc-name { font-size:.77rem; color:var(--fg); }
+.tc-dur  { font-family:var(--mono); font-size:.68rem; color:var(--com); }
+.tc-jira { font-family:var(--mono); font-size:.68rem; }
+.res-f { font-family:var(--mono); font-size:.67rem; font-weight:700; color:var(--red); }
+/* AI block */
+.ai-block { margin:0 12px 8px 32px; padding:12px 14px; background:var(--sf1); border-left:3px solid var(--cyan); border-radius:0 var(--r) var(--r) 0; }
+details.tc-row[open] .ai-block { animation:slideDown .2s ease .08s both; }
+.ai-lbl { display:flex; align-items:center; gap:5px; margin-bottom:8px; font-family:var(--mono); font-size:.58rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--cyan); }
+.ai-lbl::before { content:'◆'; font-size:.4rem; }
+.ai-block p { font-size:12px; color:var(--com); line-height:1.6; }
+.ai-block strong { color:var(--fg); }
+.ai-block code { font-family:var(--mono); font-size:.7rem; background:rgba(var(--cyan-rgb),.08); color:var(--cyan); padding:1px 4px; border-radius:3px; }
+.ai-tag       { display:inline-block; margin-top:8px; padding:2px 7px; border-radius:3px; font-family:var(--mono); font-size:.6rem; font-weight:700; background:rgba(var(--red-rgb),.1);    color:var(--red);    border:1px solid rgba(var(--red-rgb),.28); }
+.ai-tag.ok    { background:rgba(var(--green-rgb),.1);  color:var(--green);  border:1px solid rgba(var(--green-rgb),.28); }
+.ai-tag.warn  { background:rgba(var(--orange-rgb),.1); color:var(--orange); border:1px solid rgba(var(--orange-rgb),.25); }
+/* History strip */
+.tc-hist { margin:0 12px 0 32px; padding:10px 14px; background:var(--sf0); border-left:3px solid var(--bdr2); border-bottom:1px solid var(--bdr); }
+.tc-hist.tc-hist-scene { border-left-color:rgba(var(--orange-rgb,255,184,108),.5); }
+/* Scenario-level error TC row */
+details.tc-row.tc-scene-err { border-left:3px solid var(--orange); }
+details.tc-row.tc-scene-err > summary { background:rgba(var(--orange-rgb,255,184,108),.05); }
+details.tc-row.tc-scene-err > summary:hover { background:rgba(var(--orange-rgb,255,184,108),.1); }
+details.tc-row.tc-scene-err .tc-name { color:var(--orange); }
+.res-scene { color:var(--orange) !important; border-color:rgba(var(--orange-rgb,255,184,108),.4) !important; background:rgba(var(--orange-rgb,255,184,108),.1) !important; }
+/* JIRA context block */
+.jira-block { margin:0 12px 0 32px; padding:10px 14px; background:var(--sf0); border-left:3px solid rgba(var(--yellow-rgb,241,250,140),.55); border-bottom:1px solid var(--bdr); }
+details.tc-row[open] .jira-block { animation:slideDown .2s ease .04s both; }
+.jira-lbl { font-family:var(--mono); font-size:.57rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#b5bc2a; margin-bottom:8px; display:flex; align-items:center; gap:5px; }
+.jira-lbl::before { content:'◆'; font-size:.4rem; }
+.jira-ticket { display:flex; align-items:baseline; gap:9px; padding:4px 0; text-decoration:none; border-bottom:1px dashed var(--bdr); border-bottom-color:var(--bdr); color:var(--com); font-family:var(--mono); font-size:.68rem; transition:color .1s; }
+.jira-ticket:last-child { border-bottom:none; }
+.jira-ticket:hover { color:var(--fg); }
+.jt-key { font-weight:700; color:var(--com); flex-shrink:0; }
+.jira-ticket.direct .jt-key { color:var(--yellow); }
+.jt-badge { font-size:.57rem; padding:1px 5px; border-radius:3px; background:var(--sf2); color:var(--com2); flex-shrink:0; white-space:nowrap; }
+.jt-priority { font-size:.57rem; padding:1px 5px; border-radius:3px; flex-shrink:0; }
+.jt-summary { flex:1; color:var(--fg); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }details.tc-row[open] .tc-hist { animation:slideDown .2s ease both; }
+.tch-hdr { font-family:var(--mono); font-size:.57rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--com2); margin-bottom:8px; }
+.tch-strip { display:flex; gap:4px; margin-bottom:7px; }
+.tch-b { flex:1; height:34px; max-width:56px; border-radius:var(--r); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; cursor:default; transition:transform .1s; }
+.tch-b:hover { transform:translateY(-3px); }
+.tch-b.pass    { background:rgba(var(--green-rgb),.13); border:1px solid rgba(var(--green-rgb),.26); }
+.tch-b.fail,
+.tch-b.error   { background:rgba(var(--red-rgb),.13);   border:1px solid rgba(var(--red-rgb),.3); }
+.tch-b.timeout { background:rgba(var(--orange-rgb),.13); border:1px solid rgba(var(--orange-rgb),.28); }
+.tch-b.skip    { background:rgba(var(--orange-rgb),.1);  border:1px solid rgba(var(--orange-rgb),.22); }
+.tch-b.na      { background:rgba(0,0,0,.15); border:1px dashed var(--bdr); opacity:.5; }
+.tch-b.cur     { outline:2px solid var(--purple); outline-offset:2px; }
+.tch-sym { font-size:.68rem; line-height:1; }
+.tch-num { font-family:var(--mono); font-size:.58rem; color:var(--fg); font-weight:500; }
+.tch-b.pass .tch-sym    { color:var(--green); }
+.tch-b.fail .tch-sym,
+.tch-b.error .tch-sym   { color:var(--red); }
+.tch-b.timeout .tch-sym { color:var(--orange); }
+.tch-b.skip .tch-sym    { color:var(--orange); }
+.tch-footer { display:flex; align-items:center; gap:16px; font-family:var(--mono); font-size:.63rem; color:var(--com); flex-wrap:wrap; }
+.tch-rate { font-weight:700; color:var(--fg); }
+.tch-note { color:var(--red); }
+.tch-cur-links { display:flex; align-items:center; gap:8px; margin-bottom:9px; padding:6px 0; border-top:1px solid var(--bdr); }
+.tch-cur-links a { font-family:var(--mono); font-size:.65rem; font-weight:600; padding:2px 10px; border-radius:3px; border:1px solid var(--bdr2); border-bottom:1px solid var(--bdr2); text-decoration:none; color:var(--com); transition:color .1s,border-color .1s,background .1s; }
+.tch-cur-links a:hover { color:var(--fg); border-color:var(--com); background:var(--sf2); }
+.tch-cur-links .lk-log { color:var(--red); border-color:rgba(var(--red-rgb),.35); }
+.tch-cur-links .lk-log:hover { background:rgba(var(--red-rgb),.08); border-color:var(--red); }
+/* Empty state */
+.empty-state { padding:48px 0; text-align:center; font-family:var(--mono); font-size:.78rem; color:var(--com); }
+/* ════════════════════════════════════════════════════════════════════════════════
+   PERFORMANCE TAB
+   ════════════════════════════════════════════════════════════════════════════════ */
+.spark-key { display:flex; gap:18px; margin-bottom:16px; flex-wrap:wrap; font-family:var(--mono); font-size:.63rem; color:var(--com); align-items:center; }
+.sk-item { display:flex; align-items:flex-end; gap:5px; }
+.sk-bar  { width:8px; border-radius:2px 2px 0 0; }
+.perf-model { margin-bottom:28px; border:1px solid var(--bdr); border-radius:var(--r); overflow:hidden; }
+details.perf-model > summary { list-style:none; cursor:pointer; user-select:none; display:flex; align-items:center; gap:12px; padding:12px 16px; background:var(--sf1); border-left:3px solid var(--purple); transition:background .12s; }
+details.perf-model > summary::-webkit-details-marker { display:none; }
+details.perf-model > summary:hover { background:var(--sf2); }
+details.perf-model[open] > summary .arr { transform:rotate(90deg); color:var(--purple); }
+.perf-model.m-good > summary { border-left-color:var(--green); }
+.perf-model.m-bad  > summary { border-left-color:var(--red); }
+.perf-model.m-neu  > summary { border-left-color:var(--orange); }
+.qs-group { display:flex; gap:7px; margin-left:auto; align-items:center; flex-shrink:0; }
+.qs-chip { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:3px; background:var(--sf0); border:1px solid var(--bdr); }
+.qs-label { font-family:var(--mono); font-size:.54rem; text-transform:uppercase; letter-spacing:.09em; color:var(--com2); }
+.qs-val   { font-family:var(--mono); font-size:.71rem; font-weight:600; color:var(--fg); }
+.qs-val.green { color:var(--green); }
+.qs-val.red   { color:var(--red); }
+.model-counts { font-family:var(--mono); font-size:.63rem; color:var(--com); white-space:nowrap; padding-left:6px; border-left:1px solid var(--bdr); flex-shrink:0; }
+details.perf-model[open] .perf-body { animation:slideDown .22s ease both; }
+.trend-chip { font-family:var(--mono); font-size:.62rem; font-weight:700; padding:2px 8px; border-radius:3px; }
+.trend-chip.up  { background:rgba(var(--green-rgb),.1);  color:var(--green);  border:1px solid rgba(var(--green-rgb),.25); }
+.trend-chip.down{ background:rgba(var(--red-rgb),.1);    color:var(--red);    border:1px solid rgba(var(--red-rgb),.25); }
+.trend-chip.neu { background:rgba(var(--orange-rgb),.1); color:var(--orange); border:1px solid rgba(var(--orange-rgb),.22); }
+.perf-cols { display:grid; grid-template-columns:195px 120px 1fr 84px 96px; gap:0 14px; padding:6px 16px; background:var(--sf0); border-bottom:1px solid var(--bdr); }
+.perf-cols span { font-family:var(--mono); font-size:.57rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--com2); }
+.metric-row { display:grid; grid-template-columns:195px 120px 1fr 84px 96px; gap:0 14px; padding:9px 16px; align-items:center; border-bottom:1px solid var(--bdr); transition:background .1s; }
+.metric-row:last-child { border-bottom:none; }
+.metric-row:hover { background:var(--sf1); }
+.m-name { font-size:.79rem; color:var(--fg); display:block; }
+.m-unit { font-family:var(--mono); font-size:.59rem; color:var(--com); display:block; margin-top:2px; }
+.perf-spark { display:inline-flex; align-items:flex-end; gap:3px; height:24px; border-bottom:1px solid var(--bdr2); padding:0 2px 0 0; }
+.psp { width:10px; height:var(--h); border-radius:2px 2px 0 0; flex-shrink:0; background:rgba(var(--purple-rgb),.28); transition:height .2s ease; }
+details.perf-model[open] .psp { animation:growH .45s ease both; animation-delay:calc(var(--i,0)*.028s + .12s); }
+.m-good .psp     { background:rgba(var(--green-rgb),.22); }
+.m-good .psp.cur { background:var(--green); }
+.m-bad  .psp     { background:rgba(var(--red-rgb),.18); }
+.m-bad  .psp.cur { background:var(--red); }
+.m-neu  .psp     { background:rgba(var(--purple-rgb),.28); }
+.m-neu  .psp.cur { background:var(--purple); }
+.m-value { font-family:var(--mono); font-size:.88rem; font-weight:700; color:var(--fg); }
+.m-value.green { color:var(--green); }
+.m-value.red   { color:var(--red); }
+.m-delta { font-family:var(--mono); font-size:.7rem; display:block; }
+.m-delta.pos { color:var(--green); }
+.m-delta.neg { color:var(--red); }
+.m-delta.neu { color:var(--orange); }
+.m-ref { font-family:var(--mono); font-size:.65rem; color:var(--com); display:block; }
+.model-summary { display:flex; gap:6px; padding:8px 16px; background:var(--sf0); border-top:1px solid var(--bdr); font-family:var(--mono); font-size:.64rem; color:var(--com); align-items:center; flex-wrap:wrap; }
+.ms-chip { padding:1px 6px; border-radius:3px; }
+
+/* ══ RESPONSIVE — narrow screens ═══════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .shell { padding: 0 10px 60px; }
+
+  /* Header */
+  .build-id { font-size: 1.5rem; }
+  .hdr { padding: 18px 14px 14px; }
+
+  /* Tab labels shorter */
+  .tabs label { padding: 10px 14px; font-size: .65rem; }
+
+  /* Failures table — config chips wrap naturally on narrow screens, nothing to hide */
+  .sc-tbl-hdr { grid-template-columns: 22px 2fr 1fr 70px; }
+  details.sc-row > summary { grid-template-columns: 22px 2fr 1fr 70px; }
+
+  /* TC rows — drop duration column, keep name + status */
+  .tc-list-hdr { grid-template-columns: 22px 1fr 60px; }
+  .tc-list-hdr span:nth-child(3),
+  .tc-list-hdr span:nth-child(4) { display: none; }
+  details.tc-row > summary { grid-template-columns: 22px 1fr 60px; }
+  details.tc-row > summary > .tc-dur,
+  details.tc-row > summary > .tc-jira { display: none; }
+
+  /* History strip — smaller squares */
+  .tch-b { height: 28px; }
+  .tch-num { font-size: .46rem; }
+
+  /* Performance — horizontally scrollable so NO data is hidden.
+     Sparklines, deltas, and reference are all still visible via scroll. */
+  .perf-body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .perf-cols  { min-width: 560px; }
+  .metric-row { min-width: 560px; }
+
+  /* Summary chips — wrap on narrow */
+  .qs-group { flex-wrap: wrap; gap: 4px; }
+  .model-summary { font-size: .6rem; }
+}
+
+/* ══ PRINT ══════════════════════════════════════════════════════════════════ */
+@media print {
+  /* Light background — dark Dracula doesn't print well */
+  :root {
+    --bg:  #ffffff;  --sf0: #f5f5f5;  --sf1: #eeeeee;  --sf2: #e0e0e0;
+    --fg:  #111111;  --com: #555555;  --com2: #888888;
+    --bdr: rgba(0,0,0,.15);  --bdr2: rgba(0,0,0,.25);
+  }
+
+  /* Remove animations, shadows, shimmer */
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .hdr::after { display: none; }
+  .dot { display: none; }
+
+  /* Hide interactive chrome */
+  .tabs, nav.tabs, #t1, #t2 { display: none !important; }
+
+  /* Show all panels expanded */
+  .panel { display: block !important; }
+
+  /* Expand all details — show without summary arrows */
+  details { display: block !important; }
+  details > summary { list-style: none; cursor: default; }
+  details > summary .arr { display: none; }
+
+  /* Prevent page breaks inside test cases */
+  details.tc-row, details.sc-row, .metric-row { break-inside: avoid; }
+
+  /* Full width */
+  .shell { max-width: 100%; padding: 0 12px; }
+
+  /* Readable link colour on white */
+  a { color: #0066cc; border-bottom: none; }
+}
+</style>
+</head>
+<body>
+
+<input type="radio" name="t" id="t1" checked>
+<input type="radio" name="t" id="t2">
+
+<div class="shell">
+
+  <header class="hdr">
+    <div class="hdr-top">
+      <div class="build-id"><a href="https://ci.example.com/jobs/1247"><sup>#</sup>1247</a></div>
+    </div>
+    <div class="hdr-meta">
+      <span><span class="mlbl">Branch</span><a href="https://github.com/example-org/example-repo/tree/feature/chunked-upload">feature/chunked-upload</a></span>
+      <span><span class="mlbl">Commit</span><a href="https://github.com/example-org/example-repo/commit/a3f9d12">a3f9d12</a></span>
+      <span><span class="mlbl">Ref build</span><a href="https://ci.example.com/jobs/1244">#1244</a></span>
+    </div>
+    <div class="hdr-badges">
+      <span class="bdg bdg-p">34 PASSED</span>
+      <span class="bdg bdg-f">2 FAILED</span>
+      <span class="bdg bdg-s">3 SKIPPED</span>
+      <span class="bdg bdg-m">18 METRICS</span>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <label for="t1">Failures</label>
+    <label for="t2">Performance</label>
+  </nav>
+
+
+  <div class="panel" id="p1">
+    <div class="sc-tbl-hdr">
+      <span></span><span>Scenario</span><span>Configuration</span><span>Status</span>
+    </div>
+
+    <details class="sc-row" style="--row:0">
+      <summary>
+        <span class="arr">›</span>
+        <span class="sc-name">E2E Upload Pipeline</span>
+        <span class="sc-cfg">docker-arm64 · Linux · agent-01</span>
+        <span class="sc-stat">
+          <span class="f">1F</span>
+        </span>
+      </summary>
+      <div class="tc-list">
+        <div class="tc-list-hdr">
+          <span></span><span>Test case</span><span>Duration</span><span>JIRA</span><span>Status</span>
+        </div>
+
+        <details class="tc-row">
+          <summary>
+            <span class="arr">›</span>
+            <span class="tc-name">Bearer token expiry at chunk boundary (fault injection)</span>
+            <span class="tc-dur">18.1s</span>
+            <span class="tc-jira"><a href="https://jira.example.com/browse/PIPE-458">PIPE-458</a></span>
+            <span class="res-f">FAIL</span>
+          </summary>
+
+          <div class="tc-hist">
+            <div class="tch-hdr">
+              Test history ·
+              builds #1240–#1247
+            </div>
+            <div class="tch-strip">
+              <div class="tch-b pass"
+                   data-tip="#1240 · PASS · 29.8s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1240</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1241 · PASS · 31.2s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1241</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1242 · PASS · 30.5s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1242</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1243 · PASS · 28.9s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1243</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1244 · PASS · 30.1s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1244</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1245 · PASS · 31.0s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1245</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1246 · PASS · 29.7s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1246</span>
+              </div>
+              <div class="tch-b fail cur"
+                   data-tip="#1247 · FAIL · 18.1s">
+                <span class="tch-sym">✗</span>
+                <span class="tch-num">#1247</span>
+              </div>
+            </div>
+            <div class="tch-cur-links">
+              <a href="https://ci.example.com/jobs/1247/tasks/38">task</a>
+              <a href="https://ci.example.com/jobs/1247/logs/pipe-458" class="lk-log">failure log</a>
+            </div>
+            <div class="tch-footer">
+              <span><span class="tch-rate">7 / 8 passed</span></span>
+              <span class="tch-note">⚠ first failure — consistent pass until current build</span>
+            </div>
+          </div>
+
+
+          <div class="ai-block">
+            <div class="ai-lbl">AI Analysis</div>
+            <p><strong>HTTP 403</strong> at chunk 7/8 (56 MB into final chunk). Root cause: <code>JFROG_CLI_TOKEN_REFRESH=true</code> missing from <strong>agent-01</strong> environment. Token issued at T+0 expired at T+18m. Variable present in ref build #1244 — regression introduced in last agent pool re-provision (<a href="https://jira.example.com/browse/PIPE-459">PIPE-459</a>). Fix: add variable to <code>eu-west-1/agent-01.env</code> and re-run.</p>
+            <span class="ai-tag">
+              REGRESSION · HTTP 403 · agent-01 env
+            </span>
+          </div>
+        </details>
+
+      </div>
+    </details>
+    <details class="sc-row" style="--row:1">
+      <summary>
+        <span class="arr">›</span>
+        <span class="sc-name">Checksum Deduplication</span>
+        <span class="sc-cfg">k8s-pod · Linux · pool-eu-west-1</span>
+        <span class="sc-stat">
+          <span class="f">2F</span>
+        </span>
+      </summary>
+      <div class="tc-list">
+        <div class="tc-list-hdr">
+          <span></span><span>Test case</span><span>Duration</span><span>JIRA</span><span>Status</span>
+        </div>
+
+        <details class="tc-row">
+          <summary>
+            <span class="arr">›</span>
+            <span class="tc-name">Cross-repo dedup timeout under concurrent load</span>
+            <span class="tc-dur">30.4s</span>
+            <span class="tc-jira"><a href="https://jira.example.com/browse/PIPE-476">PIPE-476</a></span>
+            <span class="res-f">FAIL</span>
+          </summary>
+
+          <div class="tc-hist">
+            <div class="tch-hdr">
+              Test history ·
+              builds #1240–#1247
+            </div>
+            <div class="tch-strip">
+              <div class="tch-b pass"
+                   data-tip="#1240 · PASS · 28.1s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1240</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1241 · PASS · 27.8s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1241</span>
+              </div>
+              <div class="tch-b fail"
+                   data-tip="#1242 · FAIL · 30.2s">
+                <span class="tch-sym">✗</span>
+                <span class="tch-num">#1242</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1243 · PASS · 28.4s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1243</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1244 · PASS · 27.9s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1244</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1245 · PASS · 28.1s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1245</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1246 · PASS · 27.6s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1246</span>
+              </div>
+              <div class="tch-b fail cur"
+                   data-tip="#1247 · FAIL · 30.4s">
+                <span class="tch-sym">✗</span>
+                <span class="tch-num">#1247</span>
+              </div>
+            </div>
+            <div class="tch-cur-links">
+              <a href="https://ci.example.com/jobs/1247/tasks/41">task</a>
+              <a href="https://ci.example.com/jobs/1247/logs/pipe-476" class="lk-log">failure log</a>
+            </div>
+            <div class="tch-footer">
+              <span><span class="tch-rate">6 / 8 passed</span></span>
+              <span class="tch-note">⚠ intermittent — 1 prior failure(s) in window</span>
+            </div>
+          </div>
+
+
+          <div class="ai-block">
+            <div class="ai-lbl">AI Analysis</div>
+            <p>Cross-repo dedup timed out at the <strong>30s threshold</strong> under concurrent k8s pod load. <code>artifactory.dedup.timeout</code> is set to 30s but request took 30.4s. Previous failure also in #1242 under similar load conditions. Recommendation: increase timeout to <code>45s</code> in <code>k8s-configmap.yaml</code> or add pod resource limit guards.</p>
+            <span class="ai-tag">
+              TIMEOUT · 30s threshold exceeded
+            </span>
+          </div>
+        </details>
+        <details class="tc-row">
+          <summary>
+            <span class="arr">›</span>
+            <span class="tc-name">Dedup skips binary when SHA-256 collision detected (edge case)</span>
+            <span class="tc-dur">0.2s</span>
+            <span class="tc-jira"><a href="https://jira.example.com/browse/PIPE-477">PIPE-477</a></span>
+            <span class="res-f">ERROR</span>
+          </summary>
+
+          <div class="tc-hist">
+            <div class="tch-hdr">
+              Test history ·
+              builds #1240–#1247
+            </div>
+            <div class="tch-strip">
+              <div class="tch-b pass"
+                   data-tip="#1240 · PASS · 0.9s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1240</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1241 · PASS · 0.8s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1241</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1242 · PASS · 0.9s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1242</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1243 · PASS · 0.8s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1243</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1244 · PASS · 0.9s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1244</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1245 · PASS · 0.9s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1245</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1246 · PASS · 0.8s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1246</span>
+              </div>
+              <div class="tch-b error cur"
+                   data-tip="#1247 · ERROR · 0.2s">
+                <span class="tch-sym">✗</span>
+                <span class="tch-num">#1247</span>
+              </div>
+            </div>
+            <div class="tch-cur-links">
+              <a href="https://ci.example.com/jobs/1247/tasks/42">task</a>
+              <a href="https://ci.example.com/jobs/1247/logs/pipe-477" class="lk-log">failure log</a>
+            </div>
+            <div class="tch-footer">
+              <span><span class="tch-rate">7 / 8 passed</span></span>
+              <span class="tch-note">⚠ first failure — consistent pass until current build</span>
+            </div>
+          </div>
+
+
+          <div class="ai-block">
+            <div class="ai-lbl">AI Analysis</div>
+            <p><strong>NullPointerException</strong> in <code>DeduplicationService.resolveCollision()</code> at line 412. Stack trace: <code>artifactory-core-7.71.3.jar</code>. This is a newly introduced code path in the <code>7.71.x</code> upgrade — method assumes non-null <code>checksumEntity</code> but the k8s pod received a malformed response from the remote node during high load. Filed upstream as <a href="https://jfrog.atlassian.net/browse/RTFACT-12345">RTFACT-12345</a>.</p>
+            <span class="ai-tag">
+              ERROR · NullPointerException · upstream bug
+            </span>
+          </div>
+        </details>
+
+      </div>
+    </details>
+    <details class="sc-row" style="--row:2">
+      <summary>
+        <span class="arr">›</span>
+        <span class="sc-name">Multipart Upload — Network Resilience</span>
+        <span class="sc-cfg">docker-amd64 · Linux · agent-02</span>
+        <span class="sc-stat">
+          <span class="f">1F</span>
+        </span>
+      </summary>
+      <div class="tc-list">
+        <div class="tc-list-hdr">
+          <span></span><span>Test case</span><span>Duration</span><span>JIRA</span><span>Status</span>
+        </div>
+
+        <details class="tc-row">
+          <summary>
+            <span class="arr">›</span>
+            <span class="tc-name">Upload survives 60s network partition mid-transfer</span>
+            <span class="tc-dur">3m 12s</span>
+            <span class="tc-jira"><a href="https://jira.example.com/browse/PIPE-481">PIPE-481</a></span>
+            <span class="res-f">TIMEOUT</span>
+          </summary>
+
+          <div class="tc-hist">
+            <div class="tch-hdr">
+              Test history ·
+              builds #1240–#1247
+            </div>
+            <div class="tch-strip">
+              <div class="tch-b pass"
+                   data-tip="#1240 · PASS · 2m 18s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1240</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1241 · PASS · 2m 22s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1241</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1242 · PASS · 2m 19s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1242</span>
+              </div>
+              <div class="tch-b skip"
+                   data-tip="#1243 · SKIP · —">
+                <span class="tch-sym">⚠</span>
+                <span class="tch-num">#1243</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1244 · PASS · 2m 21s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1244</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1245 · PASS · 2m 20s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1245</span>
+              </div>
+              <div class="tch-b pass"
+                   data-tip="#1246 · PASS · 2m 23s">
+                <span class="tch-sym">✓</span>
+                <span class="tch-num">#1246</span>
+              </div>
+              <div class="tch-b timeout cur"
+                   data-tip="#1247 · TIMEOUT · 3m 12s">
+                <span class="tch-sym">⏱</span>
+                <span class="tch-num">#1247</span>
+              </div>
+            </div>
+            <div class="tch-cur-links">
+              <a href="https://ci.example.com/jobs/1247/tasks/55">task</a>
+              <a href="https://ci.example.com/jobs/1247/logs/pipe-481" class="lk-log">failure log</a>
+            </div>
+            <div class="tch-footer">
+              <span><span class="tch-rate">6 / 8 passed</span></span>
+              <span class="tch-note">⚠ first failure — consistent pass until current build</span>
+            </div>
+          </div>
+
+
+          <div class="ai-block">
+            <div class="ai-lbl">AI Analysis</div>
+            <p>Test timed out at <strong>3 minutes</strong> (threshold: 3m). The 60s partition was injected at T+42s but CLI did not resume after reconnect — backoff timer reached <code>MAX_RETRY_WAIT=120s</code> without completing the chunk. CLI version <strong>2.52.0</strong> introduced a regression in exponential backoff cap. Workaround: set <code>JFROG_CLI_UPLOAD_RETRY_MAX_WAIT=60</code> in agent environment.</p>
+            <span class="ai-tag">
+              TIMEOUT · backoff regression in CLI 2.52.0
+            </span>
+          </div>
+        </details>
+
+      </div>
+    </details>
+
+  </div>
+
+
+  <div class="panel" id="p2">
+
+    <div class="spark-key" style="margin-bottom:18px">
+      <div class="sk-item">
+        <span class="sk-bar" style="height:14px;background:rgba(80,250,123,.4);border-radius:2px 2px 0 0"></span>
+        <span class="sk-bar" style="height:20px;background:#50fa7b;border-radius:2px 2px 0 0"></span>
+        <span>Improving / current</span>
+      </div>
+      <div class="sk-item">
+        <span class="sk-bar" style="height:14px;background:rgba(255,85,85,.3);border-radius:2px 2px 0 0"></span>
+        <span class="sk-bar" style="height:8px;background:#ff5555;border-radius:2px 2px 0 0"></span>
+        <span>Regressing / current</span>
+      </div>
+      <div class="sk-item">
+        <span class="sk-bar" style="height:14px;background:rgba(189,147,249,.35);border-radius:2px 2px 0 0"></span>
+        <span class="sk-bar" style="height:14px;background:#bd93f9;border-radius:2px 2px 0 0"></span>
+        <span>Stable / current</span>
+      </div>
+      <span style="color:var(--com)">↑ always = improvement (lower-is-better metrics are inverted)</span>
+    </div>
+
+    <details class="perf-model m-good"
+             style="animation:fadeUp .4s ease 0.00s both">
+      <summary>
+        <span class="arr">›</span>
+        <div>
+          <span style="font-size:.82rem;font-weight:600;color:var(--fg)">JFrog CLI 2.x · Linux arm64</span>
+          <span class="trend-chip up" style="margin-left:10px">
+            ▲ Improved
+          </span>
+        </div>
+        <div class="qs-group">
+          <span class="qs-chip">
+            <span class="qs-label">throughput</span>
+            <span class="qs-val green">87.3 MB/s</span>
+          </span>
+          <span class="qs-chip">
+            <span class="qs-label">latency p95</span>
+            <span class="qs-val green">234 ms</span>
+          </span>
+        </div>
+        <span class="model-counts">4 / 5 improved</span>
+      </summary>
+
+      <div class="perf-body">
+        <div class="perf-cols">
+          <span>Metric</span>
+          <span>Trend (8 builds)</span>
+          <span>Current</span>
+          <span>Δ vs #1244</span>
+          <span>Reference</span>
+        </div>
+
+        <div class="metric-row m-good">
+          <div>
+            <span class="m-name">Upload Throughput</span>
+            <span class="m-unit">MB/s · ↑ higher better</span>
+          </div>
+          <div class="perf-spark"
+               data-tip="Builds 1240 → 1241 → 1242 → 1243 → 1244 → 1245 → 1246 → 1247&#10;74 → 77.1 → 78.4 → 79.2 → 81 → 83.3 → 85.1 → 87.3 MB/s">
+            <span class="psp"
+                  style="--h:8px; --i:0"></span>
+            <span class="psp"
+                  style="--h:11px; --i:1"></span>
+            <span class="psp"
+                  style="--h:12px; --i:2"></span>
+            <span class="psp"
+                  style="--h:13px; --i:3"></span>
+            <span class="psp"
+                  style="--h:14px; --i:4"></span>
+            <span class="psp"
+                  style="--h:16px; --i:5"></span>
+            <span class="psp"
+                  style="--h:18px; --i:6"></span>
+            <span class="psp cur"
+                  style="--h:20px; --i:7"></span>
+          </div>
+          <div>
+            <span class="m-value green">
+              87.3 MB/s
+            </span>
+          </div>
+          <div>
+            <span class="m-delta pos">▲ +5.3%</span>
+            <span class="m-ref">ref: 82.9</span>
+          </div>
+          <div>
+            <span class="m-ref" style="font-size:.72rem;color:var(--fg)">
+              82.9 MB/s
+            </span>
+          </div>
+        </div>
+        <div class="metric-row m-good">
+          <div>
+            <span class="m-name">Upload Latency p95</span>
+            <span class="m-unit">ms · ↓ lower better · bars inv.</span>
+          </div>
+          <div class="perf-spark"
+               data-tip="Builds 1240 → 1241 → 1242 → 1243 → 1244 → 1245 → 1246 → 1247&#10;268 → 262 → 255 → 258 → 249 → 244 → 241 → 234 ms">
+            <span class="psp"
+                  style="--h:8px; --i:0"></span>
+            <span class="psp"
+                  style="--h:10px; --i:1"></span>
+            <span class="psp"
+                  style="--h:13px; --i:2"></span>
+            <span class="psp"
+                  style="--h:12px; --i:3"></span>
+            <span class="psp"
+                  style="--h:15px; --i:4"></span>
+            <span class="psp"
+                  style="--h:16px; --i:5"></span>
+            <span class="psp"
+                  style="--h:18px; --i:6"></span>
+            <span class="psp cur"
+                  style="--h:20px; --i:7"></span>
+          </div>
+          <div>
+            <span class="m-value green">
+              234 ms
+            </span>
+          </div>
+          <div>
+            <span class="m-delta pos">▼ -8.2%</span>
+            <span class="m-ref">ref: 255</span>
+          </div>
+          <div>
+            <span class="m-ref" style="font-size:.72rem;color:var(--fg)">
+              255 ms
+            </span>
+          </div>
+        </div>
+        <div class="metric-row m-good">
+          <div>
+            <span class="m-name">Checksum Computation</span>
+            <span class="m-unit">ms · ↓ lower better · bars inv.</span>
+          </div>
+          <div class="perf-spark"
+               data-tip="Builds 1240 → 1241 → 1242 → 1243 → 1244 → 1245 → 1246 → 1247&#10;51 → 49 → 48 → 47 → 46 → 47 → 46 → 45 ms">
+            <span class="psp"
+                  style="--h:8px; --i:0"></span>
+            <span class="psp"
+                  style="--h:12px; --i:1"></span>
+            <span class="psp"
+                  style="--h:14px; --i:2"></span>
+            <span class="psp"
+                  style="--h:16px; --i:3"></span>
+            <span class="psp"
+                  style="--h:18px; --i:4"></span>
+            <span class="psp"
+                  style="--h:16px; --i:5"></span>
+            <span class="psp"
+                  style="--h:18px; --i:6"></span>
+            <span class="psp cur"
+                  style="--h:20px; --i:7"></span>
+          </div>
+          <div>
+            <span class="m-value green">
+              45 ms
+            </span>
+          </div>
+          <div>
+            <span class="m-delta pos">▼ -4.3%</span>
+            <span class="m-ref">ref: 47</span>
+          </div>
+          <div>
+            <span class="m-ref" style="font-size:.72rem;color:var(--fg)">
+              47 ms
+            </span>
+          </div>
+        </div>
+        <div class="metric-row m-good">
+          <div>
+            <span class="m-name">Retry Count</span>
+            <span class="m-unit">retries · ↓ lower better · bars inv.</span>
+          </div>
+          <div class="perf-spark"
+               data-tip="Builds 1240 → 1241 → 1242 → 1243 → 1244 → 1245 → 1246 → 1247&#10;2 → 1 → 1 → 0 → 1 → 0 → 0 → 0 retries">
+            <span class="psp"
+                  style="--h:8px; --i:0"></span>
+            <span class="psp"
+                  style="--h:14px; --i:1"></span>
+            <span class="psp"
+                  style="--h:14px; --i:2"></span>
+            <span class="psp"
+                  style="--h:20px; --i:3"></span>
+            <span class="psp"
+                  style="--h:14px; --i:4"></span>
+            <span class="psp"
+                  style="--h:20px; --i:5"></span>
+            <span class="psp"
+                  style="--h:20px; --i:6"></span>
+            <span class="psp cur"
+                  style="--h:20px; --i:7"></span>
+          </div>
+          <div>
+            <span class="m-value">
+              0 retries
+            </span>
+          </div>
+          <div>
+            <span class="m-delta neu">→ N/A</span>
+            <span class="m-ref">ref: 0</span>
+          </div>
+          <div>
+            <span class="m-ref" style="font-size:.72rem;color:var(--fg)">
+              0 retries
+            </span>
+          </div>
+        </div>
+        <div class="metric-row m-good">
+          <div>
+            <span class="m-name">CPU Utilisation (avg)</span>
+            <span class="m-unit">% · ↓ lower better · bars inv.</span>
+          </div>
+          <div class="perf-spark"
+               data-tip="Builds 1240 → 1241 → 1242 → 1243 → 1244 → 1245 → 1246 → 1247&#10;42 → 40 → 39 → 38 → 37 → 36 → 35 → 34 %">
+            <span class="psp"
+                  style="--h:8px; --i:0"></span>
+            <span class="psp"
+                  style="--h:11px; --i:1"></span>
+            <span class="psp"
+                  style="--h:12px; --i:2"></span>
+            <span class="psp"
+                  style="--h:14px; --i:3"></span>
+            <span class="psp"
+                  style="--h:16px; --i:4"></span>
+            <span class="psp"
+                  style="--h:17px; --i:5"></span>
+            <span class="psp"
+                  style="--h:18px; --i:6"></span>
+            <span class="psp cur"
+                  style="--h:20px; --i:7"></span>
+          </div>
+          <div>
+            <span class="m-value green">
+              34 %
+            </span>
+          </div>
+          <div>
+            <span class="m-delta pos">▼ -10.5%</span>
+            <span class="m-ref">ref: 38</span>
+          </div>
+          <div>
+            <span class="m-ref" style="font-size:.72rem;color:var(--fg)">
+              38 %
+            </span>
+          </div>
+        </div>
+
+        <div class="model-summary">
+          <span style="color:var(--fg)">Summary:</span>
+          <span class="ms-chip" style="background:rgba(80,250,123,.1);color:var(--green)">4 improved</span>
+          <span class="ms-chip" style="background:rgba(98,114,164,.1);color:var(--com)">1 neutral</span>
+          <span class="ms-chip"
+                style="background:rgba(255,85,85,.1);color:var(--red)">
+            0 regressed
+          </span>
+          <span style="margin-left:auto">
+            Best throughput in 8-build window; workers auto-scaled to pool max
+          </span>
+        </div>
+      </div>
+    </details>
+    <details class="perf-model m-bad"
+             style="animation:fadeUp .4s ease 0.10s both">
+      <summary>
+        <span class="arr">›</span>
+        <div>
+          <span style="font-size:.82rem;font-weight:600;color:var(--fg)">Curl Fallback · Linux amd64</span>
+          <span class="trend-chip down" style="margin-left:10px">
+            ▼ Regressed
+          </span>
+        </div>
+        <div class="qs-group">
+          <span class="qs-chip">
+            <span class="qs-label">throughput</span>
+            <span class="qs-val red">72.1 MB/s</span>
+          </span>
+          <span class="qs-chip">
+            <span class="qs-label">latency p95</span>
+            <span class="qs-val red">312 ms</span>
+          </span>
+        </div>
+        <span class="model-counts">4 / 4 regressed</span>
+      </summary>
+
+      <div class="perf-body">
+        <div class="perf-cols">
+          <span>Metric</span>
+          <span>Trend (8 builds)</span>
+          <span>Current</span>
+          <span>Δ vs #1244</span>
+          <span>Reference</span>
+        </div>
+
+        <div class="metric-row m-bad">
+          <div>
+            <span class="m-name">Upload Throughput</span>
+            <span class="m-unit">MB/s · ↑ higher better</span>
+          </div>
+          <div class="perf-spark"
+               data-tip="Builds 1240 → 1241 → 1242 → 1243 → 1244 → 1245 → 1246 → 1247&#10;76 → 75.1 → 74.3 → 74 → 73.2 → 74.1 → 73 → 72.1 MB/s">
+            <span class="psp"
+                  style="--h:20px; --i:0"></span>
+            <span class="psp"
+                  style="--h:17px; --i:1"></span>
+            <span class="psp"
+                  style="--h:15px; --i:2"></span>
+            <span class="psp"
+                  style="--h:14px; --i:3"></span>
+            <span class="psp"
+                  style="--h:11px; --i:4"></span>
+            <span class="psp"
+                  style="--h:14px; --i:5"></span>
+            <span class="psp"
+                  style="--h:11px; --i:6"></span>
+            <span class="psp cur"
+                  style="--h:8px; --i:7"></span>
+          </div>
+          <div>
+            <span class="m-value red">
+              72.1 MB/s
+            </span>
+          </div>
+          <div>
+            <span class="m-delta neg">▼ -3.7%</span>
+            <span class="m-ref">ref: 74.9</span>
+          </div>
+          <div>
+            <span class="m-ref" style="font-size:.72rem;color:var(--fg)">
+              74.9 MB/s
+            </span>
+          </div>
+        </div>
+        <div class="metric-row m-bad">
+          <div>
+            <span class="m-name">Upload Latency p95</span>
+            <span class="m-unit">ms · ↓ lower better · bars inv.</span>
+          </div>
+          <div class="perf-spark"
+               data-tip="Builds 1240 → 1241 → 1242 → 1243 → 1244 → 1245 → 1246 → 1247&#10;280 → 282 → 285 → 283 → 286 → 288 → 290 → 312 ms">
+            <span class="psp"
+                  style="--h:20px; --i:0"></span>
+            <span class="psp"
+                  style="--h:19px; --i:1"></span>
+            <span class="psp"
+                  style="--h:18px; --i:2"></span>
+            <span class="psp"
+                  style="--h:19px; --i:3"></span>
+            <span class="psp"
+                  style="--h:18px; --i:4"></span>
+            <span class="psp"
+                  style="--h:17px; --i:5"></span>
+            <span class="psp"
+                  style="--h:16px; --i:6"></span>
+            <span class="psp cur"
+                  style="--h:8px; --i:7"></span>
+          </div>
+          <div>
+            <span class="m-value red">
+              312 ms
+            </span>
+          </div>
+          <div>
+            <span class="m-delta neg">▲ +9.1%</span>
+            <span class="m-ref">ref: 286</span>
+          </div>
+          <div>
+            <span class="m-ref" style="font-size:.72rem;color:var(--fg)">
+              286 ms
+            </span>
+          </div>
+        </div>
+        <div class="metric-row m-bad">
+          <div>
+            <span class="m-name">Connection Reuse Rate</span>
+            <span class="m-unit">% · ↑ higher better</span>
+          </div>
+          <div class="perf-spark"
+               data-tip="Builds 1240 → 1241 → 1242 → 1243 → 1244 → 1245 → 1246 → 1247&#10;72 → 71.3 → 72.1 → 70.4 → 71 → 70.2 → 70 → 61.4 %">
+            <span class="psp"
+                  style="--h:20px; --i:0"></span>
+            <span class="psp"
+                  style="--h:19px; --i:1"></span>
+            <span class="psp"
+                  style="--h:20px; --i:2"></span>
+            <span class="psp"
+                  style="--h:18px; --i:3"></span>
+            <span class="psp"
+                  style="--h:19px; --i:4"></span>
+            <span class="psp"
+                  style="--h:18px; --i:5"></span>
+            <span class="psp"
+                  style="--h:18px; --i:6"></span>
+            <span class="psp cur"
+                  style="--h:8px; --i:7"></span>
+          </div>
+          <div>
+            <span class="m-value red">
+              61.4 %
+            </span>
+          </div>
+          <div>
+            <span class="m-delta neg">▼ -12.3%</span>
+            <span class="m-ref">ref: 70</span>
+          </div>
+          <div>
+            <span class="m-ref" style="font-size:.72rem;color:var(--fg)">
+              70 %
+            </span>
+          </div>
+        </div>
+        <div class="metric-row m-bad">
+          <div>
+            <span class="m-name">Retry Count</span>
+            <span class="m-unit">retries · ↓ lower better · bars inv.</span>
+          </div>
+          <div class="perf-spark"
+               data-tip="Builds 1240 → 1241 → 1242 → 1243 → 1244 → 1245 → 1246 → 1247&#10;1 → 1 → 0 → 1 → 1 → 1 → 2 → 3 retries">
+            <span class="psp"
+                  style="--h:16px; --i:0"></span>
+            <span class="psp"
+                  style="--h:16px; --i:1"></span>
+            <span class="psp"
+                  style="--h:20px; --i:2"></span>
+            <span class="psp"
+                  style="--h:16px; --i:3"></span>
+            <span class="psp"
+                  style="--h:16px; --i:4"></span>
+            <span class="psp"
+                  style="--h:16px; --i:5"></span>
+            <span class="psp"
+                  style="--h:12px; --i:6"></span>
+            <span class="psp cur"
+                  style="--h:8px; --i:7"></span>
+          </div>
+          <div>
+            <span class="m-value red">
+              3 retries
+            </span>
+          </div>
+          <div>
+            <span class="m-delta neg">▲ +200.0%</span>
+            <span class="m-ref">ref: 1</span>
+          </div>
+          <div>
+            <span class="m-ref" style="font-size:.72rem;color:var(--fg)">
+              1 retries
+            </span>
+          </div>
+        </div>
+
+        <div class="model-summary">
+          <span style="color:var(--fg)">Summary:</span>
+          <span class="ms-chip" style="background:rgba(80,250,123,.1);color:var(--green)">0 improved</span>
+          <span class="ms-chip" style="background:rgba(98,114,164,.1);color:var(--com)">0 neutral</span>
+          <span class="ms-chip"
+                style="background:rgba(255,85,85,.1);color:var(--red);border:1px solid rgba(255,85,85,.22)">
+            4 regressed
+          </span>
+          <span style="margin-left:auto;color:var(--red)">
+            Latency spike and conn-reuse drop — possible TCP keep-alive config change
+          </span>
+        </div>
+      </div>
+    </details>
+    <details class="perf-model m-good"
+             style="animation:fadeUp .4s ease 0.20s both">
+      <summary>
+        <span class="arr">›</span>
+        <div>
+          <span style="font-size:.82rem;font-weight:600;color:var(--fg)">JFrog CLI 2.x · Windows bare-metal</span>
+          <span class="trend-chip up" style="margin-left:10px">
+            ▲ Improved
+          </span>
+        </div>
+        <div class="qs-group">
+          <span class="qs-chip">
+            <span class="qs-label">throughput</span>
+            <span class="qs-val">70.2 MB/s</span>
+          </span>
+          <span class="qs-chip">
+            <span class="qs-label">latency p95</span>
+            <span class="qs-val">291 ms</span>
+          </span>
+        </div>
+        <span class="model-counts">1 / 4 improved</span>
+      </summary>
+
+      <div class="perf-body">
+        <div class="perf-cols">
+          <span>Metric</span>
+          <span>Trend (8 builds)</span>
+          <span>Current</span>
+          <span>Δ vs #1244</span>
+          <span>Reference</span>
+        </div>
+
+        <div class="metric-row m-good">
+          <div>
+            <span class="m-name">Upload Throughput</span>
+            <span class="m-unit">MB/s · ↑ higher better</span>
+          </div>
+          <div class="perf-spark"
+               data-tip="Builds 1240 → 1241 → 1242 → 1243 → 1244 → 1245 → 1246 → 1247&#10;68.1 → 69.3 → 70 → 69.2 → 70.1 → 71 → 70.2 → 70.2 MB/s">
+            <span class="psp"
+                  style="--h:8px; --i:0"></span>
+            <span class="psp"
+                  style="--h:13px; --i:1"></span>
+            <span class="psp"
+                  style="--h:16px; --i:2"></span>
+            <span class="psp"
+                  style="--h:13px; --i:3"></span>
+            <span class="psp"
+                  style="--h:16px; --i:4"></span>
+            <span class="psp"
+                  style="--h:20px; --i:5"></span>
+            <span class="psp"
+                  style="--h:17px; --i:6"></span>
+            <span class="psp cur"
+                  style="--h:17px; --i:7"></span>
+          </div>
+          <div>
+            <span class="m-value">
+              70.2 MB/s
+            </span>
+          </div>
+          <div>
+            <span class="m-delta neu">▲ +0.3%</span>
+            <span class="m-ref">ref: 70</span>
+          </div>
+          <div>
+            <span class="m-ref" style="font-size:.72rem;color:var(--fg)">
+              70 MB/s
+            </span>
+          </div>
+        </div>
+        <div class="metric-row m-good">
+          <div>
+            <span class="m-name">Upload Latency p95</span>
+            <span class="m-unit">ms · ↓ lower better · bars inv.</span>
+          </div>
+          <div class="perf-spark"
+               data-tip="Builds 1240 → 1241 → 1242 → 1243 → 1244 → 1245 → 1246 → 1247&#10;294 → 290 → 291 → 288 → 292 → 290 → 289 → 291 ms">
+            <span class="psp"
+                  style="--h:8px; --i:0"></span>
+            <span class="psp"
+                  style="--h:16px; --i:1"></span>
+            <span class="psp"
+                  style="--h:14px; --i:2"></span>
+            <span class="psp"
+                  style="--h:20px; --i:3"></span>
+            <span class="psp"
+                  style="--h:12px; --i:4"></span>
+            <span class="psp"
+                  style="--h:16px; --i:5"></span>
+            <span class="psp"
+                  style="--h:18px; --i:6"></span>
+            <span class="psp cur"
+                  style="--h:14px; --i:7"></span>
+          </div>
+          <div>
+            <span class="m-value">
+              291 ms
+            </span>
+          </div>
+          <div>
+            <span class="m-delta neu">▲ +0.3%</span>
+            <span class="m-ref">ref: 290</span>
+          </div>
+          <div>
+            <span class="m-ref" style="font-size:.72rem;color:var(--fg)">
+              290 ms
+            </span>
+          </div>
+        </div>
+        <div class="metric-row m-good">
+          <div>
+            <span class="m-name">CPU Utilisation (avg)</span>
+            <span class="m-unit">% · ↓ lower better · bars inv.</span>
+          </div>
+          <div class="perf-spark"
+               data-tip="Builds 1240 → 1241 → 1242 → 1243 → 1244 → 1245 → 1246 → 1247&#10;48 → 47 → 48 → 46 → 47 → 46 → 47 → 46 %">
+            <span class="psp"
+                  style="--h:8px; --i:0"></span>
+            <span class="psp"
+                  style="--h:14px; --i:1"></span>
+            <span class="psp"
+                  style="--h:8px; --i:2"></span>
+            <span class="psp"
+                  style="--h:20px; --i:3"></span>
+            <span class="psp"
+                  style="--h:14px; --i:4"></span>
+            <span class="psp"
+                  style="--h:20px; --i:5"></span>
+            <span class="psp"
+                  style="--h:14px; --i:6"></span>
+            <span class="psp cur"
+                  style="--h:20px; --i:7"></span>
+          </div>
+          <div>
+            <span class="m-value">
+              46 %
+            </span>
+          </div>
+          <div>
+            <span class="m-delta neu">→ 0%</span>
+            <span class="m-ref">ref: 46</span>
+          </div>
+          <div>
+            <span class="m-ref" style="font-size:.72rem;color:var(--fg)">
+              46 %
+            </span>
+          </div>
+        </div>
+        <div class="metric-row m-good">
+          <div>
+            <span class="m-name">TLS Handshake Time</span>
+            <span class="m-unit">ms · ↓ lower better · bars inv.</span>
+          </div>
+          <div class="perf-spark"
+               data-tip="Builds 1240 → 1241 → 1242 → 1243 → 1244 → 1245 → 1246 → 1247&#10;48 → 46 → 45 → 44 → 43 → 44 → 43 → 42 ms">
+            <span class="psp"
+                  style="--h:8px; --i:0"></span>
+            <span class="psp"
+                  style="--h:12px; --i:1"></span>
+            <span class="psp"
+                  style="--h:14px; --i:2"></span>
+            <span class="psp"
+                  style="--h:16px; --i:3"></span>
+            <span class="psp"
+                  style="--h:18px; --i:4"></span>
+            <span class="psp"
+                  style="--h:16px; --i:5"></span>
+            <span class="psp"
+                  style="--h:18px; --i:6"></span>
+            <span class="psp cur"
+                  style="--h:20px; --i:7"></span>
+          </div>
+          <div>
+            <span class="m-value green">
+              42 ms
+            </span>
+          </div>
+          <div>
+            <span class="m-delta pos">▼ -4.5%</span>
+            <span class="m-ref">ref: 44</span>
+          </div>
+          <div>
+            <span class="m-ref" style="font-size:.72rem;color:var(--fg)">
+              44 ms
+            </span>
+          </div>
+        </div>
+
+        <div class="model-summary">
+          <span style="color:var(--fg)">Summary:</span>
+          <span class="ms-chip" style="background:rgba(80,250,123,.1);color:var(--green)">1 improved</span>
+          <span class="ms-chip" style="background:rgba(98,114,164,.1);color:var(--com)">3 neutral</span>
+          <span class="ms-chip"
+                style="background:rgba(255,85,85,.1);color:var(--red)">
+            0 regressed
+          </span>
+          <span style="margin-left:auto">
+            Stable — Windows 5-thread pool cap limits throughput vs Linux arm64
+          </span>
+        </div>
+      </div>
+    </details>
+
+
+  </div>
+
+</div><!-- /shell -->
+<div style="font-family:var(--mono);font-size:.55rem;color:var(--com2);text-align:right;padding:12px 28px">
+  Generated 2026-06-27 17:00
+</div>
+</body>
+</html>

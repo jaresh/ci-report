@@ -38,9 +38,10 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 from collections import defaultdict
 
-from .base import DataSource
+from .base import DataSource, Profiler
 
 log = logging.getLogger(__name__)
 
@@ -65,10 +66,17 @@ _BATCH_HISTORY_SQL = """
     ORDER  BY name, ran_at DESC
 """
 
-# All performance data — models and build window discovered in Python
+# Fetch only the last perf_history_limit distinct builds to avoid a full
+# table scan as performance_metrics grows over time.
 _PERF_SQL = """
     SELECT model, metric_name, unit, direction, build, value
     FROM   performance_metrics
+    WHERE  build IN (
+        SELECT DISTINCT build
+        FROM   performance_metrics
+        ORDER  BY recorded_at DESC
+        LIMIT  %s
+    )
     ORDER  BY model, metric_name, recorded_at ASC
 """
 
@@ -213,16 +221,27 @@ class ClickHouseSource(DataSource):
             log.error('clickhouse: "build" key not set — add "build": "{build}" to config')
             return {}
 
+        prof    = Profiler()
+        t_start = time.perf_counter()
+
         try:
-            client, driver = self._connect(host, port, database, user, password)
+            with prof.span("connect_s"):
+                client, driver = self._connect(host, port, database, user, password)
         except Exception as exc:
             log.error("clickhouse: cannot connect — %s", exc)
             return {}
 
         try:
+            failures    = self._collect_failures(client, driver, config, prof)
+            performance = self._collect_performance(client, driver, config, prof)
             return {
-                "failures":    self._collect_failures(client, driver, config),
-                "performance": self._collect_performance(client, driver, config),
+                "failures":    failures,
+                "performance": performance,
+                "profiling": {
+                    "tool":    self.name,
+                    "total_s": round(time.perf_counter() - t_start, 3),
+                    "spans":   prof.to_dict(),
+                },
             }
         except Exception as exc:
             log.error("clickhouse: collection failed — %s", exc)
@@ -230,24 +249,26 @@ class ClickHouseSource(DataSource):
 
     # ── Failures ──────────────────────────────────────────────────────────────
 
-    def _collect_failures(self, client, driver: str, config: dict) -> list:
+    def _collect_failures(self, client, driver: str, config: dict, prof: Profiler) -> list:
         build     = str(config["build"])
         limit     = int(config.get("history_limit", 7))
         jira_base = config.get("jira_base_url", "")
         task_base = config.get("task_base_url", "")
         log_base  = config.get("log_base_url",  "")
 
-        rows = self._execute(client, driver, _FAILURES_SQL, [build])
+        with prof.span("failures_query_s"):
+            rows = self._execute(client, driver, _FAILURES_SQL, [build])
         if not rows:
             log.info("clickhouse: no failures for build %s", build)
             return []
 
         names    = list({r["name"] for r in rows})
         hist_sql = _BATCH_HISTORY_SQL.format(ph=', '.join(['%s'] * len(names)))
-        hist_map = _group_history(
-            self._execute(client, driver, hist_sql, list(names) + [build]),
-            limit,
-        )
+        with prof.span("history_query_s"):
+            hist_map = _group_history(
+                self._execute(client, driver, hist_sql, list(names) + [build]),
+                limit,
+            )
 
         groups: dict = {}
         for row in rows:
@@ -287,12 +308,13 @@ class ClickHouseSource(DataSource):
 
     # ── Performance ───────────────────────────────────────────────────────────
 
-    def _collect_performance(self, client, driver: str, config: dict) -> list:
+    def _collect_performance(self, client, driver: str, config: dict, prof: Profiler) -> list:
         current_build = str(config.get("build", ""))
         ref_build     = str(config.get("ref_build", ""))
         limit         = int(config.get("perf_history_limit", 8))
 
-        rows = self._execute(client, driver, _PERF_SQL, [])
+        with prof.span("perf_query_s"):
+            rows = self._execute(client, driver, _PERF_SQL, [limit])
         if not rows:
             log.info("clickhouse: no rows in performance_metrics")
             return []
