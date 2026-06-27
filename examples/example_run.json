@@ -63,7 +63,6 @@
     "context_file":    "examples/context.txt",
     "log_dir":         "examples/logs/",
     "max_tokens":      600,
-    "delay_between":   0.5,
     "skip_if_present": true,
     "_api_key_note":   "Set ANTHROPIC_API_KEY env var before running"
   }

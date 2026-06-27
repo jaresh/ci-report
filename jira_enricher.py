@@ -57,7 +57,7 @@ Usage — standalone
 
 Usage — from generate_report.py
 ────────────────────────────────
-    python generate_report.py --junit-xml --jira --ai 1247
+    python generate_report.py --mysql --jira --ai 1247
 """
 
 from __future__ import annotations

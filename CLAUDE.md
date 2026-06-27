@@ -46,9 +46,12 @@ template.html             Jinja2 HTML template (Dracula theme, self-contained)
 config.json               User config (gitignored — copy from examples/)
 
 datasources/
-  base.py                 DataSource ABC + merge_results()
-  tool_mysql.py           MySQL / MariaDB full data source
-  tool_clickhouse.py      ClickHouse full data source
+  base.py                 DataSource ABC, Profiler, schema TypedDicts, merge_results()
+  transports.py           DB connection + query mixins (MySQLTransport, ClickHouseTransport)
+  contract.py             Shared row→contract builders (_fmt_dur, _build_performance, …)
+  logs.py                 LogFetcher — parallel HTTP log download + profiling
+  tool_mysql.py           MySQL data source — schema-specific SQL + mapping only
+  tool_clickhouse.py      ClickHouse data source — schema-specific SQL + mapping only
   tool_template.py        Scaffold for new data source tools
 
 tests/
@@ -98,6 +101,32 @@ depends on. See the next section.
 Tools run in parallel via `ThreadPoolExecutor`. Their outputs are concatenated
 by `merge_results()` in `datasources/base.py`.
 
+#### Three-layer split (transport / contract / tool)
+
+A tool is composed from three layers so that **the database driver, the
+JSON-contract construction, and the schema mapping are independent**. This is
+what lets two test frameworks with *different schemas* each have their own tool
+while sharing everything else:
+
+| Layer | File | Responsibility | Shared? |
+|---|---|---|---|
+| Transport | `datasources/transports.py` | `_connect()` + query method (`_query` / `_execute`) | Shared by every tool on that DB driver |
+| Contract builders | `datasources/contract.py` | row→JSON helpers (`_fmt_dur`, `_history_list`, `_build_performance`, `_safe`) | Shared by all tools |
+| Tool | `datasources/tool_<name>.py` | SQL constants + `collect()` + `_collect_failures()` / `_collect_performance()` (row→column mapping) | Per framework — the divergence point |
+
+A tool subclasses `DataSource` **and** its transport:
+
+```python
+class FrameworkASource(DataSource, MySQLTransport):
+    # only SQL + row→contract mapping live here
+```
+
+`MySQLSource` / `ClickHouseSource` are exactly this: thin schema tools on the
+shared layers. The transport gives them `_connect`/`_query`/`_execute`; the
+contract module gives them the builders. Their `_collect_failures` /
+`_collect_performance` currently look alike only because they read the same
+canonical schema — that is the slot meant to diverge per framework.
+
 ### Config resolution
 
 `{build}` in any config string value is replaced with the build name at
@@ -129,6 +158,7 @@ resolve it themselves.
           "jira_url":        str,
           "task_url":        str,
           "log_url":         str,
+          "log_file":        str,   # optional: local path to a fetched log (AI reads it)
           "history": [
             {"build": str, "status": str, "duration": str},
             # ... last entry always has "current": True
@@ -177,38 +207,52 @@ collection run and prints warnings without aborting.
 
 ## How to add a new data source
 
-1. **Copy the scaffold:**
+For a **SQL-backed framework tool**, reuse the shared layers — you write only
+SQL + row mapping. (For a non-DB source, copy `tool_template.py` instead and
+implement `collect()` directly.)
 
-   ```bash
-   cp datasources/tool_template.py datasources/tool_mydb.py
+1. **Pick or add a transport.** If the framework's DB is MySQL or ClickHouse,
+   reuse `MySQLTransport` / `ClickHouseTransport` from `datasources/transports.py`.
+   For a new database, add a transport class there exposing `_connect()` and a
+   query method that returns `list[dict]`.
+
+2. **Create the tool** `datasources/tool_<name>.py`:
+
+   ```python
+   from .base import DataSource, ModelPerformance, Profiler, Scenario, TestCase, ToolOutput, ToolProfiling
+   from .contract import _build_performance, _fmt_dur, _group_history, _history_list, _safe
+   from .transports import MySQLTransport
+
+   class FrameworkASource(DataSource, MySQLTransport):
+       @property
+       def name(self) -> str: return "frameworka"
+       def collect(self, config: dict) -> ToolOutput: ...
    ```
 
-2. **Implement the class** — fill in `name`, `description`, and `collect()`.
-   `collect()` must return the JSON contract above.
+   Put **only** the framework's SQL constants and the row→contract mapping
+   (`_collect_failures` / `_collect_performance`) in this file. Use the
+   `contract.py` builders to assemble the JSON; do not re-implement them. Use
+   `tool_mysql.py` as the reference. Opt into log fetching by calling
+   `attach_logs()` under a `fetch_logs` config check (see `tool_mysql.collect`).
 
 3. **Register it** in `generate_report.py`:
 
    ```python
-   from datasources.tool_mydb import MyDbSource
-   TOOLS["mydb"] = MyDbSource()
+   from datasources.tool_frameworka import FrameworkASource
+   TOOLS["frameworka"] = FrameworkASource()
    ```
 
-   `argparse` automatically adds `--mydb` to the CLI from the `TOOLS` dict.
+   `argparse` automatically adds `--frameworka` to the CLI from the `TOOLS` dict.
 
-4. **Add a config block** to `examples/config.json`:
+4. **Add a config block** to `examples/config.json` (connection + the framework's
+   `build`, plus optional `log_*` keys).
 
-   ```json
-   "mydb": {
-     "host": "...",
-     "build": "{build}"
-   }
-   ```
+5. **Add fixture data** in `examples/fixtures/<name>_schema.sql`.
 
-5. **Add fixture data** in `examples/fixtures/mydb_schema.sql`.
-
-6. **Write tests** in `tests/test_tools.py` following the existing
-   `TestMySQLSourceContract` pattern — mock at the query level, verify the
-   output shape.
+6. **Write tests** in `tests/test_tools.py` following `TestMySQLSourceContract` —
+   mock at the `_query` / `_execute` level, verify the output shape. The shared
+   `contract.py` builders are already covered by `TestBuildPerformance` etc., so
+   a new tool's tests focus on its own row→contract mapping.
 
 7. **Update docs** — `README.md` project structure, CLI reference, and DB
    tools sections.
@@ -359,7 +403,11 @@ grep -r "old_name" --include="*.py" --include="*.json" --include="*.md" .
   start of `collect()` and return `{}` immediately to avoid a useless
   connection attempt.
 - **Template rendering**: `template.html` is a single self-contained file.
-  Keep all CSS and JS inline. Do not add external CDN dependencies.
+  Keep all CSS inline. Do not add external CDN dependencies. **No JavaScript:**
+  the report must render and fully function with scripting disabled. Use only
+  HTML and CSS — pure-CSS patterns (`:hover`, `:target`, `<details>`/`<summary>`)
+  for any interactivity. Never add `<script>` tags, inline event handlers
+  (`onclick=…`), or `javascript:` URLs.
 
 ---
 
@@ -368,10 +416,11 @@ grep -r "old_name" --include="*.py" --include="*.json" --include="*.md" .
 | Module | Covered by |
 |---|---|
 | `datasources/base.py` — `merge_results()` | `tests/test_tools.py::TestMergeResults` |
-| `datasources/tool_mysql.py` — helpers | `tests/test_tools.py::TestFmtDur` … `TestBuildPerformance` |
+| `datasources/contract.py` — builders | `tests/test_tools.py::TestFmtDur` … `TestBuildPerformance` |
+| `datasources/transports.py` — `_execute()` adapter | `tests/test_tools.py::TestClickHouseExecuteAdapter` |
+| `datasources/logs.py` — fetch + profiling | `tests/test_logs.py` |
 | `datasources/tool_mysql.py` — `collect()` contract | `tests/test_tools.py::TestMySQLSourceContract` |
 | `datasources/tool_clickhouse.py` — `collect()` contract | `tests/test_tools.py::TestClickHouseSourceContract` |
-| `datasources/tool_clickhouse.py` — `_execute()` adapter | `tests/test_tools.py::TestClickHouseExecuteAdapter` |
 | `generate_report.py` — computation | `tests/test_compute.py` |
 | `generate_report.py` — `prepare_data()` | `tests/test_tools.py::TestPrepareData` |
 | `jira_enricher.py` — term extraction | `tests/test_compute.py::TestExtractTerms` |
@@ -403,12 +452,25 @@ Every `collect()` call records timing data and returns it under a `"profiling"` 
         "connect_s":        0.12,
         "failures_query_s": 0.84,
         "history_query_s":  2.90,
-        "perf_query_s":     0.34
+        "perf_query_s":     0.34,
+        "log_fetch_s":      1.90
+      },
+      "logs": {
+        "count": 42, "ok": 40, "failed": 2, "cached": 0,
+        "workers": 8, "wall_s": 1.90, "sum_s": 11.3, "speedup": 5.9,
+        "bytes_total": 10485760, "throughput_mb_s": 5.5,
+        "connect_sum_s": 4.4, "transfer_sum_s": 6.9,
+        "per_file_s": {"min": 0.08, "p50": 0.32, "p95": 1.9, "max": 4.1, "mean": 0.44},
+        "slowest": [{"key": "test_x", "s": 4.1, "bytes": 2400000}]
       }
     }
   }
 }
 ```
+
+The `logs` block is present only when the tool fetched logs (`fetch_logs` config
+key). It is produced by `LogFetcher` in `datasources/logs.py`; see
+"Log download profiling" below for how to read it.
 
 ### How tools record timings
 
@@ -454,6 +516,7 @@ Standard span names (use these in every tool):
 | `failures_query_s` | Main failures SELECT |
 | `history_query_s` | Batch history SELECT (typical bottleneck) |
 | `perf_query_s` | Performance metrics SELECT |
+| `log_fetch_s` | Parallel log download (detail in `profiling.logs`) |
 
 Add further spans for any additional DB or API calls a tool makes.
 
@@ -487,6 +550,7 @@ slow span to one of the three levers above — never to a schema change.
 | `jira_s` > 2 s | Many tickets searched per failure | Set `"skip_if_present": true` in JIRA config |
 | `ai_s` > 5 s | Many unenriched failures | Set `"skip_if_present": true` in AI config |
 | `collection_s` ≈ slowest tool | Parallel tools; wall time = max, not sum | Optimise the slowest tool first |
+| `log_fetch_s` high | Many/large logs, or per-file TLS handshakes | Client-side levers — see "Log download profiling" |
 
 #### What the agent must NOT suggest
 
@@ -507,6 +571,31 @@ create it.
 - Span names must end in `_s` and use `lower_snake_case`.
 - `collect()` must still return `{}` on error — never a partial dict with only `"profiling"`.
 
+### Log download profiling
+
+Tools that download per-test-case logs (via `attach_logs()` in
+`datasources/logs.py`, gated on the `fetch_logs` config key) record a detailed
+`profiling.logs` block alongside the `log_fetch_s` wall span. Unlike DB spans,
+**log fetching is entirely client-side — every optimisation lever is available**
+(there is no read-only constraint). Map the block to a lever:
+
+| What the block shows | Likely cause | Lever |
+|---|---|---|
+| `speedup` ≈ `workers` | workers saturated; more would help | raise `log_parallel_requests` |
+| `speedup` ≪ `workers` | server throttling / connection cap | lower workers; respect the endpoint's rate limit |
+| `connect_sum_s` ≫ `transfer_sum_s` | new TLS handshake per file | reuse a keep-alive session (thread-local `requests.Session`) |
+| high `p95`/`max`, low `p50` | a few huge/slow logs dominate the tail | set `log_tail_bytes` to fetch only the error tail via HTTP `Range` |
+| `throughput_mb_s` near link capacity | bandwidth-bound | gzip (`Accept-Encoding`) or fetch less (`log_tail_bytes`) |
+| `bytes_total` huge | pulling full multi-MB logs | `log_tail_bytes` / `log_max_bytes` |
+| `failed` > 0 with timeouts | flaky endpoint | raise `log_timeout`; add bounded retry |
+| `cached` low on a replay run | re-downloading immutable per-build logs | keep `log_skip_if_present: true` |
+
+The two highest-value levers this block is designed to prove or disprove:
+**session keep-alive** (watch `connect_sum_s`) and **tail-only Range requests**
+(watch `bytes_total` + `slowest`). The current `LogFetcher` uses stdlib `urllib`
+(no session reuse); a high `connect_sum_s` share is the signal to switch to a
+pooled session.
+
 ---
 
 ## Pipeline efficiency
@@ -526,6 +615,9 @@ the concepts behind each one, so agents can extend them correctly.
 | AI analysis | Parallel LLM calls via `ThreadPoolExecutor` (`parallel_requests` config key, default 4) |
 | Phase replay | Each phase writes `<build>.data.json`; re-running a phase skips all earlier work |
 | Early exit | `_collect_failures()` returns `[]` immediately when no failures are found for the build |
+| Log fetching | Parallel HTTP downloads via `ThreadPoolExecutor` in `LogFetcher` (`log_parallel_requests`, default 8); opt-in via `fetch_logs` |
+| Log caching | `LogFetcher` skips download when the local file already exists (`log_skip_if_present`, default true) |
+| Log tail fetch | `log_tail_bytes` → HTTP `Range` to transfer only the error tail of each log |
 
 ### Parallelism design
 
@@ -543,6 +635,14 @@ safe. Dry-run mode stays sequential so print lines are not interleaved.
 are serialised under a `threading.Lock` so concurrent threads never write a
 corrupted file. Dry-run mode stays sequential.
 
+**Log fetch (within a tool):** when `fetch_logs` is set, `attach_logs()`
+(`datasources/logs.py`) runs a `ThreadPoolExecutor` (`log_parallel_requests`,
+default 8) to download all logs for the build concurrently. Each worker returns
+its own per-file record, so aggregation into `profiling.logs` is lock-free. This
+pool runs *inside* a tool's `collect()`, which itself runs inside the parallel
+collection pool — total sockets ≈ tools × `log_parallel_requests`, so keep the
+per-tool value modest.
+
 **Thread-safety rule:** any new enricher that uses `ThreadPoolExecutor` must
 hold a `threading.Lock` around every cross-thread state mutation (counters,
 `save_fn` calls, shared dicts). Never mutate `report_data` outside the lock.
@@ -559,6 +659,9 @@ These `config.json` keys trade report detail for speed without any code change:
 | `jira` | `skip_if_present` | true | Skip test cases already enriched in `.data.json` |
 | `ai` | `parallel_requests` | 4 | Fewer concurrent LLM calls (tune to your API tier's RPM limit) |
 | `ai` | `skip_if_present` | true | Skip cases that already have `ai_analysis.text` |
+| `mysql` / `clickhouse` | `log_parallel_requests` | 8 | Concurrent log downloads (when `fetch_logs` is on) |
+| `mysql` / `clickhouse` | `log_tail_bytes` | 0 | Bytes per log (0 = full); set to fetch only the tail via Range |
+| `mysql` / `clickhouse` | `log_skip_if_present` | true | Re-download of logs already cached on disk |
 
 ### Truncation constants
 
@@ -594,6 +697,11 @@ keys for truncation limits — they are implementation constants, not user tunin
   `examples/` must use placeholder values and `{build}` tokens only.
 - **Do not add OS packages to the Dockerfile.** The `python:3.11-slim` base
   image is sufficient; all dependencies are pure Python.
+- **Do not add JavaScript to `template.html`.** The report is HTML + CSS only.
+  No `<script>` tags, no inline event handlers (`onclick`, `onload`, …), no
+  `javascript:` URLs, no external JS. All interactivity must be pure CSS
+  (`:hover`, `:target`, `<details>`/`<summary>`). The report must work fully
+  with JavaScript disabled.
 - **Do not use `git add -A` or `git add .` without review.** Stage files
   explicitly by name to avoid committing `.env`, `*.data.json`, or generated
   HTML reports.

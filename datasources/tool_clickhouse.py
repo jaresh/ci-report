@@ -9,7 +9,11 @@ When this tool is enabled (--clickhouse flag), it always provides both:
   • performance — all models and metrics found in performance_metrics,
                   grouped by model, for the last perf_history_limit builds
 
-The DB schema drives what gets reported — no per-table toggles in config.
+This tool owns only what is schema-specific: the SQL constants and the
+row→contract mapping (`_collect_failures` / `_collect_performance`). The DB
+connection and the %s param adapter live in `ClickHouseTransport`
+(datasources/transports.py) and the JSON-contract builders in
+datasources/contract.py — both shared with any other ClickHouse-backed tool.
 
 Schema and fixture data: examples/fixtures/clickhouse_schema.sql
 
@@ -31,23 +35,25 @@ perf_history_limit int   builds shown in performance chart      [default: 8]
 jira_base_url     str    base URL for JIRA links                [optional]
 task_base_url     str    base URL for task links                [optional]
 log_base_url      str    base URL for log links                 [optional]
+
+Log fetching keys (optional) are documented in datasources/logs.py.
 """
 
 from __future__ import annotations
 
 import logging
 import os
-import re
 import time
-from collections import defaultdict
 
-from .base import DataSource, Profiler
+from .base import (DataSource, ModelPerformance, Profiler, Scenario,
+                   TestCase, ToolOutput, ToolProfiling)
+from .contract import (_build_performance, _fmt_dur, _group_history,
+                       _history_list, _safe)
+from .transports import ClickHouseTransport
 
 log = logging.getLogger(__name__)
 
-_SAFE_RE = re.compile(r'[^\w\-]')
-
-# ── SQL ───────────────────────────────────────────────────────────────────────
+# ── SQL (schema-specific) ───────────────────────────────────────────────────────
 
 _FAILURES_SQL = """
     SELECT scenario, config, name, status, duration_s,
@@ -81,123 +87,10 @@ _PERF_SQL = """
     ORDER  BY model, metric_name, recorded_at ASC
 """
 
-# ── Helpers (identical contract to tool_mysql.py) ────────────────────────────
-
-def _safe(name: str) -> str:
-    return _SAFE_RE.sub('_', name)[:80]
-
-
-def _fmt_dur(secs) -> str:
-    try:
-        s = float(secs or 0)
-    except (TypeError, ValueError):
-        return "—"
-    if s <= 0:
-        return "—"
-    if s >= 60:
-        m, r = divmod(s, 60)
-        return f"{int(m)}m {r:.0f}s"
-    return f"{s:.1f}s"
-
-
-def _sort_builds(builds) -> list:
-    try:
-        return sorted(builds, key=int)
-    except (ValueError, TypeError):
-        return sorted(builds)
-
-
-def _group_history(rows: list, limit: int) -> dict:
-    result: dict = {}
-    for row in rows:
-        name    = str(row["name"])
-        entries = result.setdefault(name, [])
-        if len(entries) < limit:
-            entries.append(row)
-    return result
-
-
-def _history_list(hist_entries: list, cur_status: str, cur_dur: str) -> list:
-    entries = []
-    for row in reversed(hist_entries):
-        entries.append({
-            "build":    str(row["build"]),
-            "status":   str(row["status"]),
-            "duration": _fmt_dur(row.get("duration_s")),
-        })
-    entries.append({"build": "current", "status": cur_status, "duration": cur_dur, "current": True})
-    return entries
-
-
-def _build_performance(rows: list, current_build: str, ref_build: str, limit: int) -> list:
-    """
-    Group flat performance rows into the per-model structure the template expects.
-    Models and their order are discovered from the data — no config list needed.
-    """
-    groups: dict     = defaultdict(list)
-    all_builds_seen: set = set()
-
-    for row in rows:
-        key = (str(row["model"]), str(row["metric_name"]))
-        groups[key].append(row)
-        all_builds_seen.add(str(row["build"]))
-
-    window     = set(_sort_builds(all_builds_seen)[-limit:])
-    models_ord = list(dict.fromkeys(str(r["model"]) for r in rows))
-
-    performance = []
-    for model_name in models_ord:
-        model_keys = [k for k in groups if k[0] == model_name]
-        if not model_keys:
-            continue
-
-        model_window_builds = _sort_builds(
-            {str(r["build"]) for key in model_keys for r in groups[key]} & window
-        )
-        build_window_set = set(model_window_builds)
-
-        metrics = []
-        for key in model_keys:
-            metric_name  = key[1]
-            filtered     = [r for r in groups[key] if str(r["build"]) in build_window_set]
-            build_to_val = {str(r["build"]): float(r["value"]) for r in filtered}
-            history_values = [build_to_val.get(b, 0.0) for b in model_window_builds]
-
-            current   = build_to_val.get(str(current_build))
-            if current is None:
-                current = history_values[-1] if history_values else 0.0
-            reference = build_to_val.get(str(ref_build), current)
-
-            if not filtered:
-                continue
-
-            sample = filtered[0]
-            metrics.append({
-                "name":           metric_name,
-                "unit":           str(sample["unit"]),
-                "direction":      str(sample["direction"]),
-                "current":        current,
-                "reference":      reference,
-                "history_values": history_values,
-                "history_builds": model_window_builds,
-            })
-
-        if not metrics:
-            continue
-
-        performance.append({
-            "model":         model_name,
-            "summary_note":  "",
-            "summary_chips": None,
-            "metrics":       metrics,
-        })
-
-    return performance
-
 
 # ── Source class ──────────────────────────────────────────────────────────────
 
-class ClickHouseSource(DataSource):
+class ClickHouseSource(DataSource, ClickHouseTransport):
 
     @property
     def name(self) -> str:
@@ -210,7 +103,7 @@ class ClickHouseSource(DataSource):
 
     # ── Entry point ───────────────────────────────────────────────────────────
 
-    def collect(self, config: dict) -> dict:
+    def collect(self, config: dict) -> ToolOutput:
         host     = config.get("host", "localhost")
         port     = int(config.get("port", 9000))
         database = config.get("database", "default")
@@ -233,16 +126,25 @@ class ClickHouseSource(DataSource):
             return {}
 
         try:
-            failures    = self._collect_failures(client, driver, config, prof)
+            failures  = self._collect_failures(client, driver, config, prof)
+            log_stats = None
+            if config.get("fetch_logs"):
+                from .logs import attach_logs
+                with prof.span("log_fetch_s"):
+                    log_stats = attach_logs(failures, config)
             performance = self._collect_performance(client, driver, config, prof)
+
+            profiling: ToolProfiling = {
+                "tool":    self.name,
+                "total_s": round(time.perf_counter() - t_start, 3),
+                "spans":   prof.to_dict(),
+            }
+            if log_stats is not None:
+                profiling["logs"] = log_stats
             return {
                 "failures":    failures,
                 "performance": performance,
-                "profiling": {
-                    "tool":    self.name,
-                    "total_s": round(time.perf_counter() - t_start, 3),
-                    "spans":   prof.to_dict(),
-                },
+                "profiling":   profiling,
             }
         except Exception as exc:
             log.error("clickhouse: collection failed — %s", exc)
@@ -250,7 +152,7 @@ class ClickHouseSource(DataSource):
 
     # ── Failures ──────────────────────────────────────────────────────────────
 
-    def _collect_failures(self, client, driver: str, config: dict, prof: Profiler) -> list:
+    def _collect_failures(self, client, driver: str, config: dict, prof: Profiler) -> list[Scenario]:
         build     = str(config["build"])
         limit     = int(config.get("history_limit", 7))
         jira_base = config.get("jira_base_url", "")
@@ -276,9 +178,9 @@ class ClickHouseSource(DataSource):
             key = (str(row["scenario"]), str(row["config"]))
             groups.setdefault(key, []).append(row)
 
-        scenarios = []
+        scenarios: list[Scenario] = []
         for (scenario, config_label), tcs in groups.items():
-            test_cases = []
+            test_cases: list[TestCase] = []
             for row in tcs:
                 name   = str(row["name"])
                 status = str(row["status"])
@@ -309,7 +211,7 @@ class ClickHouseSource(DataSource):
 
     # ── Performance ───────────────────────────────────────────────────────────
 
-    def _collect_performance(self, client, driver: str, config: dict, prof: Profiler) -> list:
+    def _collect_performance(self, client, driver: str, config: dict, prof: Profiler) -> list[ModelPerformance]:
         current_build = str(config.get("build", ""))
         ref_build     = str(config.get("ref_build", ""))
         limit         = int(config.get("perf_history_limit", 8))
@@ -321,51 +223,3 @@ class ClickHouseSource(DataSource):
             return []
 
         return _build_performance(rows, current_build, ref_build, limit)
-
-    # ── DB helpers ────────────────────────────────────────────────────────────
-
-    def _connect(self, host: str, port: int, database: str, user: str, password: str):
-        try:
-            from clickhouse_driver import Client
-            client = Client(
-                host=host, port=port, database=database,
-                user=user, password=password,
-                connect_timeout=10,
-            )
-            return client, 'driver'
-        except ImportError:
-            pass
-
-        try:
-            import clickhouse_connect
-            client = clickhouse_connect.get_client(
-                host=host, port=8123, database=database,
-                username=user, password=password,
-                connect_timeout=10,
-            )
-            return client, 'connect'
-        except ImportError:
-            raise RuntimeError(
-                "No ClickHouse driver found. Install one:\n"
-                "  pip install clickhouse-driver\n"
-                "  pip install clickhouse-connect"
-            )
-
-    def _execute(self, client, driver: str, sql: str, params: list = None) -> list[dict]:
-        """Execute a query and return rows as dicts, normalising both driver APIs."""
-        params = list(params or [])
-        if driver == 'driver':
-            rows, col_types = client.execute(sql, params, with_column_types=True)
-            col_names = [c[0] for c in col_types]
-            return [dict(zip(col_names, row)) for row in rows]
-        else:
-            # clickhouse-connect uses {name} style params — convert %s positionally
-            idx = [0]
-            def _repl(m):
-                key = f"_p{idx[0]}"
-                idx[0] += 1
-                return f"{{{key}}}"
-            named_sql  = re.sub(r'%s', _repl, sql)
-            param_dict = {f"_p{i}": v for i, v in enumerate(params)}
-            result     = client.query(named_sql, parameters=param_dict)
-            return [dict(zip(result.column_names, row)) for row in result.result_rows]

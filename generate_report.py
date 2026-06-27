@@ -24,7 +24,7 @@ import logging
 import os
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from datetime import datetime
 
@@ -495,7 +495,7 @@ def run_pipeline(build: str, selected_tools: list[str], run_jira: bool,
     logging.basicConfig(level=logging.INFO,
                         format="%(levelname)-8s %(name)s — %(message)s")
 
-    pipeline_start = time.time()
+    pipeline_start = time.perf_counter()
     phase_times: dict[str, float] = {}
 
     # ── Collect (parallel) ────────────────────────────────────────────────────
@@ -504,7 +504,7 @@ def run_pipeline(build: str, selected_tools: list[str], run_jira: bool,
     if selected_tools:
         print(f"Collection phase  (build: {build})  [{len(selected_tools)} tool(s) in parallel]")
 
-        t0 = time.time()
+        t0 = time.perf_counter()
         fut_map: dict = {}
         with ThreadPoolExecutor(max_workers=len(selected_tools)) as ex:
             for key in selected_tools:
@@ -523,7 +523,7 @@ def run_pipeline(build: str, selected_tools: list[str], run_jira: bool,
                 tool_outputs.append(out)
             except Exception as exc:
                 print(f"  ✗  {key}: {exc}")
-        phase_times["collection_s"] = round(time.time() - t0, 3)
+        phase_times["collection_s"] = round(time.perf_counter() - t0, 3)
     else:
         print("No collection tools selected — using base config data only")
         phase_times["collection_s"] = 0.0
@@ -547,10 +547,10 @@ def run_pipeline(build: str, selected_tools: list[str], run_jira: bool,
     # ── JIRA enrichment ───────────────────────────────────────────────────────
     if run_jira:
         print("\nJIRA enrichment phase…")
-        t0 = time.time()
+        t0 = time.perf_counter()
         from jira_enricher import JiraEnricher
         merged = JiraEnricher(config.get("jira", {})).enrich(merged)
-        phase_times["jira_s"] = round(time.time() - t0, 3)
+        phase_times["jira_s"] = round(time.perf_counter() - t0, 3)
         dump_path.write_text(json.dumps(merged, indent=2, ensure_ascii=False))
         print(f"  data (with JIRA) → {dump_path}")
     else:
@@ -560,14 +560,14 @@ def run_pipeline(build: str, selected_tools: list[str], run_jira: bool,
     # ── AI analysis ───────────────────────────────────────────────────────────
     if run_ai:
         print("\nAI analysis phase…")
-        t0 = time.time()
+        t0 = time.perf_counter()
         from ai_analyser import AIAnalyser
 
         def _incremental_save(data):
             dump_path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
 
         merged = AIAnalyser(config.get("ai", {})).enrich(merged, save_fn=_incremental_save)
-        phase_times["ai_s"] = round(time.time() - t0, 3)
+        phase_times["ai_s"] = round(time.perf_counter() - t0, 3)
         dump_path.write_text(json.dumps(merged, indent=2, ensure_ascii=False))
         print(f"  data (with AI) → {dump_path}")
     else:
@@ -576,12 +576,12 @@ def run_pipeline(build: str, selected_tools: list[str], run_jira: bool,
 
     # ── Render ────────────────────────────────────────────────────────────────
     print()
-    t0 = time.time()
+    t0 = time.perf_counter()
     _render_prepared(prepare_data(merged), template_path, output_path)
-    phase_times["render_s"] = round(time.time() - t0, 3)
+    phase_times["render_s"] = round(time.perf_counter() - t0, 3)
 
     # ── Finalise profiling ────────────────────────────────────────────────────
-    pipeline_total = round(time.time() - pipeline_start, 3)
+    pipeline_total = round(time.perf_counter() - pipeline_start, 3)
     merged["profiling"]["phases"]          = phase_times
     merged["profiling"]["pipeline_total_s"] = pipeline_total
     dump_path.write_text(json.dumps(merged, indent=2, ensure_ascii=False))
@@ -603,10 +603,10 @@ def main():
 available tools:
 {"".join(f"  --{k.replace('_', '-'):<20} {t.description}{chr(10)}" for k, t in TOOLS.items())}
 examples:
-  python generate_report.py --junit-xml --metrics-json --ai 1247
-  python generate_report.py --junit-xml --jira --ai 1247
-  python generate_report.py --junit-xml 1247
-  python generate_report.py --metrics-json --ai 1247 --out perf_1247.html
+  python generate_report.py --mysql --clickhouse --jira --ai 1247
+  python generate_report.py --mysql --jira --ai 1247
+  python generate_report.py --mysql 1247
+  python generate_report.py --clickhouse --ai 1247 --out perf_1247.html
   python generate_report.py report.data.json          # render only, no tools
 """,
     )
@@ -651,7 +651,7 @@ examples:
         p.error(f"Template not found: {template_path}")
 
     if args.build is None:
-        p.error("build name is required (e.g. generate_report.py --junit-xml 1247)")
+        p.error("build name is required (e.g. generate_report.py --mysql 1247)")
 
     # ── Render-only mode: positional arg is an existing file ─────────────────
     build_path = Path(args.build)

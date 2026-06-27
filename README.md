@@ -134,7 +134,13 @@ All settings live in `config.json`. Use `{build}` in any string value as a place
     "history_limit": 7,
     "jira_base_url": "https://org.atlassian.net/browse/",
     "task_base_url": "https://ci.example.com/jobs/{build}/tasks/",
-    "log_base_url":  "https://ci.example.com/jobs/{build}/logs/"
+    "log_base_url":  "https://ci.example.com/jobs/{build}/logs/",
+    "fetch_logs":            false,
+    "log_dest_dir":          "logs/{build}/mysql/",
+    "log_parallel_requests": 8,
+    "log_tail_bytes":        0,
+    "log_skip_if_present":   true,
+    "log_auth_token_env":    "CI_ARTIFACT_TOKEN"
   },
 
   "clickhouse": {
@@ -168,11 +174,33 @@ All settings live in `config.json`. Use `{build}` in any string value as a place
     "context_file":    "context.txt",
     "log_dir":         "logs/{build}/",
     "max_tokens":      600,
-    "delay_between":   0.5,
     "skip_if_present": true
   }
 }
 ```
+
+### Log fetching
+
+Set `"fetch_logs": true` in a data source block to download each failing test
+case's log (from its `log_url`) during collection. Logs are fetched in parallel,
+written under `log_dest_dir`, and the local path is set as the test case's
+`log_file` so the AI phase can excerpt it; `log_url` stays as the report link.
+
+| Key | Default | Purpose |
+|---|---|---|
+| `fetch_logs` | `false` | Master switch for log download in this data source |
+| `log_dest_dir` | `"logs/"` | Local directory for downloaded logs (use `{build}`) |
+| `log_parallel_requests` | `8` | Concurrent downloads |
+| `log_timeout` | `15` | Per-request HTTP timeout (seconds) |
+| `log_tail_bytes` | `0` | Fetch only the last N bytes via HTTP `Range` (0 = full file) |
+| `log_max_bytes` | `0` | Client-side cap if the server ignores `Range` (0 = none) |
+| `log_skip_if_present` | `true` | Skip download when the local file already exists |
+| `log_auth_token_env` | — | Env var holding a bearer token for the log endpoint |
+
+The fetcher records a detailed `profiling.logs` block (parallel `speedup`,
+`connect_sum_s` vs `transfer_sum_s`, `throughput_mb_s`, per-file percentiles and
+the slowest files) so you can see where download time goes and which lever to
+pull. See the Profiling section of `CLAUDE.md` for the metric→lever map.
 
 ### context.txt
 
@@ -334,13 +362,18 @@ jira_enricher.py          JIRA enrichment phase
 template.html             Jinja2 HTML template (Dracula theme)
 
 datasources/
-  base.py                 DataSource ABC + merge_results()
-  tool_mysql.py           MySQL / MariaDB full data source (failures + performance)
-  tool_clickhouse.py      ClickHouse full data source (failures + performance)
+  base.py                 DataSource ABC, Profiler, schema TypedDicts, merge_results()
+  transports.py           DB connection + query mixins (MySQL, ClickHouse)
+  contract.py             Shared row→contract builders
+  logs.py                 LogFetcher — parallel HTTP log download + profiling
+  tool_mysql.py           MySQL data source — schema-specific SQL + mapping
+  tool_clickhouse.py      ClickHouse data source — schema-specific SQL + mapping
   tool_template.py        Scaffold for new tools
 
 tests/
   test_compute.py         Unit tests for computation layer
+  test_tools.py           Data source contract + enrichment pipeline tests
+  test_logs.py            LogFetcher + log profiling tests
 
 examples/
   config.json             Example config (copy to root and customise)

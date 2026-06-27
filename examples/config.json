@@ -36,7 +36,13 @@
     "perf_history_limit": 8,
     "jira_base_url":      "https://jira.example.com/browse/",
     "task_base_url":      "https://ci.example.com/jobs/{build}/tasks/",
-    "log_base_url":       "https://ci.example.com/jobs/{build}/logs/"
+    "log_base_url":       "https://ci.example.com/jobs/{build}/logs/",
+    "fetch_logs":            false,
+    "log_dest_dir":          "logs/{build}/mysql/",
+    "log_parallel_requests": 8,
+    "log_tail_bytes":        0,
+    "log_skip_if_present":   true,
+    "log_auth_token_env":    "CI_ARTIFACT_TOKEN"
   },
 
   "clickhouse": {
@@ -52,7 +58,13 @@
     "perf_history_limit": 8,
     "jira_base_url":      "https://jira.example.com/browse/",
     "task_base_url":      "https://ci.example.com/jobs/{build}/tasks/",
-    "log_base_url":       "https://ci.example.com/jobs/{build}/logs/"
+    "log_base_url":       "https://ci.example.com/jobs/{build}/logs/",
+    "fetch_logs":            false,
+    "log_dest_dir":          "logs/{build}/clickhouse/",
+    "log_parallel_requests": 8,
+    "log_tail_bytes":        0,
+    "log_skip_if_present":   true,
+    "log_auth_token_env":    "CI_ARTIFACT_TOKEN"
   },
 
   "jira": {
@@ -73,7 +85,6 @@
     "context_file":      "examples/context.txt",
     "log_dir":           "examples/logs/",
     "max_tokens":        600,
-    "delay_between":     0.5,
     "skip_if_present":   true,
     "parallel_requests": 4,
     "_note":             "Set ANTHROPIC_API_KEY env var before using --ai. Tune parallel_requests to your API tier's RPM limit."

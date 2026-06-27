@@ -22,8 +22,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 
-from datasources.tool_mysql import (
-    MySQLSource,
+from datasources.tool_mysql import MySQLSource
+from datasources.contract import (
     _fmt_dur, _sort_builds, _group_history, _history_list, _build_performance,
 )
 from datasources.tool_clickhouse import ClickHouseSource

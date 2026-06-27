@@ -27,9 +27,12 @@ placeholder in `config.json` before any collection begins.
 | File | Purpose |
 |---|---|
 | `generate_report.py` | Main orchestrator, CLI, `prepare_data()`, `merge_results()` |
-| `datasources/base.py` | `DataSource` ABC and `merge_results()` |
-| `datasources/tool_mysql.py` | MySQL / MariaDB full data source |
-| `datasources/tool_clickhouse.py` | ClickHouse full data source |
+| `datasources/base.py` | `DataSource` ABC, `Profiler`, schema TypedDicts, `merge_results()` |
+| `datasources/transports.py` | DB connection + query mixins (`MySQLTransport`, `ClickHouseTransport`) |
+| `datasources/contract.py` | Shared row→contract builders (`_fmt_dur`, `_build_performance`, …) |
+| `datasources/logs.py` | `LogFetcher` — parallel HTTP log download + profiling |
+| `datasources/tool_mysql.py` | MySQL data source — schema-specific SQL + mapping |
+| `datasources/tool_clickhouse.py` | ClickHouse data source — schema-specific SQL + mapping |
 | `datasources/tool_template.py` | Scaffold — copy this to add a new tool |
 | `template.html` | Jinja2 template, Dracula theme, fully self-contained |
 | `tests/test_compute.py` | Unit tests for computation helpers |
@@ -40,10 +43,16 @@ placeholder in `config.json` before any collection begins.
 
 ## The DataSource pattern
 
-Every tool subclasses `DataSource` from `datasources/base.py` and implements:
+Every tool subclasses `DataSource` (from `datasources/base.py`) **plus a DB
+transport mixin** (from `datasources/transports.py`), and assembles the contract
+with the shared builders in `datasources/contract.py`. A tool holds only
+schema-specific SQL + row mapping:
 
 ```python
-class MySQLSource(DataSource):
+from .base import DataSource
+from .transports import MySQLTransport
+
+class MySQLSource(DataSource, MySQLTransport):
 
     @property
     def name(self) -> str:
@@ -56,6 +65,12 @@ class MySQLSource(DataSource):
             "performance": [...],   # even if empty
         }
 ```
+
+The transport provides `_connect()` + `_query()`/`_execute()`; `contract.py`
+provides `_fmt_dur`, `_history_list`, `_build_performance`, `_safe`. This lets two
+frameworks with different schemas share a driver and the contract-construction
+code while keeping their own SQL. Never re-implement the contract builders in a
+tool — import them.
 
 Tools are registered in `generate_report.py`:
 
@@ -96,6 +111,7 @@ Tools run in parallel via `ThreadPoolExecutor`.
         "jira_url":        str,
         "task_url":        str,
         "log_url":         str,
+        "log_file":        str,   # optional — local path to a fetched log (AI reads it)
         "history": [
           {"build": str, "status": str, "duration": str},
           # last entry MUST have "current": True
@@ -332,7 +348,9 @@ return {
             "failures_query_s": 0.84,
             "history_query_s":  2.90,
             "perf_query_s":     0.34,
+            "log_fetch_s":      1.90,  # only when fetch_logs is on
         },
+        # "logs": {...}               # detailed download profiling — see below
     },
 }
 ```
@@ -435,6 +453,11 @@ document the finding as a human-DBA recommendation — do not attempt to create 
 - **New enrichers** that use `ThreadPoolExecutor` must hold a `threading.Lock`
   around every cross-thread state write. Never mutate `report_data` outside
   the lock.
+- **Log fetching:** `attach_logs()` (`datasources/logs.py`) downloads per-test-case
+  logs in parallel when `fetch_logs` is set, sets `tc["log_file"]`, and returns a
+  `profiling.logs` block. Workers return per-file records, so aggregation is
+  lock-free. Use HTTP `Range` (`log_tail_bytes`) and on-disk caching
+  (`log_skip_if_present`) to cut transfer.
 
 ### Truncation constants (do not make these config keys)
 
@@ -454,6 +477,23 @@ document the finding as a human-DBA recommendation — do not attempt to create 
 | `jira` | `parallel_requests` | 8 | Concurrent HTTP calls |
 | `ai` | `parallel_requests` | 4 | Concurrent LLM calls |
 | `jira` / `ai` | `skip_if_present` | true | Re-enrichment of already-done cases |
+| `mysql` / `clickhouse` | `log_parallel_requests` | 8 | Concurrent log downloads (with `fetch_logs`) |
+| `mysql` / `clickhouse` | `log_tail_bytes` | 0 | Bytes per log (0 = full); set to fetch only the tail |
+| `mysql` / `clickhouse` | `log_skip_if_present` | true | Re-download of cached logs |
+
+### Log download profiling
+
+When `fetch_logs` is set, the tool's `profiling.logs` block reports parallel
+download stats. Log fetching is client-side, so every lever is available:
+
+| Block shows | Lever |
+|---|---|
+| `speedup` ≈ `workers` | raise `log_parallel_requests` |
+| `speedup` ≪ `workers` | server throttling — lower workers / respect rate limit |
+| `connect_sum_s` ≫ `transfer_sum_s` | reuse a keep-alive session (`requests.Session`) |
+| high `p95`/`max` vs `p50` | a few large logs — set `log_tail_bytes` (HTTP Range) |
+| `throughput_mb_s` near link cap | bandwidth-bound — gzip / fetch less |
+| `cached` low on replay | keep `log_skip_if_present: true` |
 
 ---
 
@@ -473,3 +513,7 @@ document the finding as a human-DBA recommendation — do not attempt to create 
 - Do not return `None` from `collect()` — return `{}` on error.
 - Do not hard-code build numbers, hostnames, or file paths in source files.
 - Do not add external CDN links to `template.html` — keep it self-contained.
+- Do not add JavaScript to `template.html` — the report is HTML + CSS only.
+  No `<script>` tags, no inline event handlers (`onclick`, `onload`, …), and no
+  `javascript:` URLs. Use pure CSS (`:hover`, `:target`, `<details>`/`<summary>`)
+  for any interactivity; the report must work with JavaScript disabled.
