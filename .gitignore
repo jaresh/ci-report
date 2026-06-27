@@ -24,6 +24,7 @@ sample_report.html
 *.swp
 .DS_Store
 Thumbs.db
+.claude/
 
 # Docker
 .dockerignore

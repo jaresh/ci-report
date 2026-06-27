@@ -43,6 +43,8 @@ import json
 import logging
 import re
 import sys
+import threading as _threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -87,9 +89,10 @@ class AIAnalyser:
     )
 
     def __init__(self, ai_config: dict):
-        self.skip_present = ai_config.get("skip_if_present", True)
-        self.log_dir      = ai_config.get("log_dir")
-        self.context      = self._load_file(ai_config.get("context_file"))
+        self.skip_present      = ai_config.get("skip_if_present", True)
+        self.log_dir           = ai_config.get("log_dir")
+        self.context           = self._load_file(ai_config.get("context_file"))
+        self.parallel_requests = int(ai_config.get("parallel_requests", 4))
 
     # ── Public entry point ────────────────────────────────────────────────────
 
@@ -105,7 +108,8 @@ class AIAnalyser:
 
         dry_run=True  — print prompts to stdout instead of calling call_fn.
         save_fn       — called with report_data after each result so partial
-                        runs survive interruption.
+                        runs survive interruption. Calls are serialized under
+                        a lock so concurrent threads never corrupt the file.
         """
         if not call_fn and not dry_run:
             log.info("ai_analyser: no call_fn provided — skipping AI phase")
@@ -123,31 +127,45 @@ class AIAnalyser:
             log.info("ai_analyser: nothing to analyse (all cases already have ai_analysis)")
             return report_data
 
-        log.info("ai_analyser: processing %d test case(s)", len(cases))
+        log.info("ai_analyser: processing %d test case(s) (parallel_requests=%d)",
+                 len(cases), self.parallel_requests)
 
-        for i, (_, tc) in enumerate(cases, 1):
-            label  = tc.get("name", "")[:60]
-            prompt = self.build_prompt(tc, build)
-
-            if dry_run:
+        if dry_run:
+            for i, (_, tc) in enumerate(cases, 1):
+                label  = tc.get("name", "")[:60]
+                prompt = self.build_prompt(tc, build)
                 print(f"\n{'─'*60}\n[{i}/{len(cases)}] {label}\n{'─'*60}")
                 print(f"SYSTEM:\n{self.SYSTEM_PROMPT}\n\nUSER:\n{prompt}")
-                continue
+            return report_data
 
+        total   = len(cases)
+        counter = [0]
+        lock    = _threading.Lock()
+
+        def _analyse_one(pair: tuple) -> None:
+            _, tc  = pair
+            label  = tc.get("name", "")[:60]
+            prompt = self.build_prompt(tc, build)
             try:
                 raw    = call_fn(self.SYSTEM_PROMPT, prompt)
                 result = self.parse_response(raw)
                 tc["ai_analysis"] = result
-                log.info("  [%d/%d] %s — tag: %s", i, len(cases), label, result.get("tag", ""))
-                if save_fn:
-                    save_fn(report_data)
+                with lock:
+                    counter[0] += 1
+                    log.info("  [%d/%d] %s — tag: %s",
+                             counter[0], total, label, result.get("tag", ""))
+                    if save_fn:
+                        save_fn(report_data)
             except Exception as exc:
-                log.error("  [%d/%d] %s — failed: %s", i, len(cases), label, exc)
+                log.error("  %s — failed: %s", label, exc)
                 tc["ai_analysis"] = {
                     "text":     f"Analysis failed: {exc}",
                     "tag":      "ANALYSIS ERROR",
                     "tag_type": "warn",
                 }
+
+        with ThreadPoolExecutor(max_workers=self.parallel_requests) as pool:
+            list(pool.map(_analyse_one, cases))
 
         return report_data
 

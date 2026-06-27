@@ -69,9 +69,11 @@ import logging
 import os
 import re
 import sys
+import threading as _threading
 import time
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
 
@@ -106,9 +108,10 @@ class JiraEnricher:
         self.projects     = jira_config.get("project_keys", [])
         self.max_related  = int(jira_config.get("max_related", 4))
         self.n_terms      = int(jira_config.get("search_terms", 3))
-        self.skip_present = jira_config.get("skip_if_present", True)
-        self.timeout      = int(jira_config.get("timeout", 10))
-        self._auth        = self._make_auth_header()
+        self.skip_present      = jira_config.get("skip_if_present", True)
+        self.timeout           = int(jira_config.get("timeout", 10))
+        self.parallel_requests = int(jira_config.get("parallel_requests", 8))
+        self._auth             = self._make_auth_header()
 
     # ── Public ────────────────────────────────────────────────────────────────
 
@@ -136,30 +139,43 @@ class JiraEnricher:
                       self.cfg.get("api_token_env", "JIRA_API_TOKEN"))
             return report_data
 
-        log.info("jira_enricher: enriching %d test case(s)", total)
-        done = 0
+        log.info("jira_enricher: enriching %d test case(s) (parallel_requests=%d)",
+                 total, self.parallel_requests)
 
-        for scenario in report_data.get("failures", []):
-            for tc in scenario.get("test_cases", []):
-                if not self._needs_enrichment(tc):
-                    continue
-                done += 1
-                label = tc.get("name", "")[:60]
-                log.info("  [%d/%d] %s", done, total, label)
+        cases = [
+            tc
+            for scenario in report_data.get("failures", [])
+            for tc in scenario.get("test_cases", [])
+            if self._needs_enrichment(tc)
+        ]
 
-                if dry_run:
-                    jql = self._build_jql(tc)
-                    direct_key = self._direct_key(tc)
-                    print(f"\n{'─'*60}")
-                    print(f"Test case : {label}")
-                    if direct_key:
-                        print(f"Direct    : GET /issue/{direct_key}")
-                    print(f"Search JQL: {jql}")
-                    tc["jira_context"] = []
-                    continue
+        if dry_run:
+            for tc in cases:
+                label      = tc.get("name", "")[:60]
+                jql        = self._build_jql(tc)
+                direct_key = self._direct_key(tc)
+                print(f"\n{'─'*60}")
+                print(f"Test case : {label}")
+                if direct_key:
+                    print(f"Direct    : GET /issue/{direct_key}")
+                print(f"Search JQL: {jql}")
+                tc["jira_context"] = []
+            return report_data
 
-                tc["jira_context"] = self._find_tickets(tc)
-                log.info("    → %d ticket(s) found", len(tc["jira_context"]))
+        counter = [0]
+        lock    = _threading.Lock()
+
+        def _enrich_one(tc: dict) -> None:
+            tc["jira_context"] = self._find_tickets(tc)
+            with lock:
+                counter[0] += 1
+                log.info("  [%d/%d] %s → %d ticket(s)",
+                         counter[0], total,
+                         tc.get("name", "")[:60],
+                         len(tc["jira_context"]))
+
+        with ThreadPoolExecutor(max_workers=self.parallel_requests) as pool:
+            list(pool.map(_enrich_one, cases))
 
         return report_data
 

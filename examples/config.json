@@ -56,24 +56,26 @@
   },
 
   "jira": {
-    "base_url":       "https://your-org.atlassian.net",
-    "email":          "ci-bot@your-org.com",
-    "api_token_env":  "JIRA_API_TOKEN",
-    "project_keys":   ["PIPE", "INFRA"],
-    "max_related":    4,
-    "search_terms":   3,
-    "skip_if_present": true,
-    "timeout":        10,
-    "_note":          "Set JIRA_API_TOKEN env var before using --jira"
+    "base_url":          "https://your-org.atlassian.net",
+    "email":             "ci-bot@your-org.com",
+    "api_token_env":     "JIRA_API_TOKEN",
+    "project_keys":      ["PIPE", "INFRA"],
+    "max_related":       4,
+    "search_terms":      3,
+    "skip_if_present":   true,
+    "timeout":           10,
+    "parallel_requests": 8,
+    "_note":             "Set JIRA_API_TOKEN env var before using --jira. parallel_requests=8 is safe under JIRA Cloud's 10 req/s rate limit."
   },
 
   "ai": {
-    "model":           "claude-sonnet-4-6",
-    "context_file":    "examples/context.txt",
-    "log_dir":         "examples/logs/",
-    "max_tokens":      600,
-    "delay_between":   0.5,
-    "skip_if_present": true,
-    "_note":           "Set ANTHROPIC_API_KEY env var before using --ai"
+    "model":             "claude-sonnet-4-6",
+    "context_file":      "examples/context.txt",
+    "log_dir":           "examples/logs/",
+    "max_tokens":        600,
+    "delay_between":     0.5,
+    "skip_if_present":   true,
+    "parallel_requests": 4,
+    "_note":             "Set ANTHROPIC_API_KEY env var before using --ai. Tune parallel_requests to your API tier's RPM limit."
   }
 }

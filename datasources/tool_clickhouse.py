@@ -51,7 +51,8 @@ _SAFE_RE = re.compile(r'[^\w\-]')
 
 _FAILURES_SQL = """
     SELECT scenario, config, name, status, duration_s,
-           failure_msg, failure_txt, jira, jira_url, task_url, log_url
+           failure_msg, substring(failure_txt, 1, 8192) AS failure_txt,
+           jira, jira_url, task_url, log_url
     FROM   test_runs
     WHERE  build = %s
       AND  status IN ('fail', 'error', 'timeout')

@@ -240,7 +240,7 @@ or adding a data source.
 pytest tests/ -v --tb=short
 ```
 
-All 173 tests must pass before any commit. If a test fails after your change:
+All tests must pass before any commit. If a test fails after your change:
 
 - Do not disable or delete the test.
 - Fix the implementation to satisfy the test.
@@ -506,6 +506,71 @@ create it.
 - Pass `prof` as the last argument to private helpers so sub-query spans are recorded.
 - Span names must end in `_s` and use `lower_snake_case`.
 - `collect()` must still return `{}` on error — never a partial dict with only `"profiling"`.
+
+---
+
+## Pipeline efficiency
+
+This section documents every performance optimisation that is implemented and
+the concepts behind each one, so agents can extend them correctly.
+
+### Implemented optimisations
+
+| Area | Technique |
+|---|---|
+| Tool collection | Parallel via `ThreadPoolExecutor` in `generate_report.py` |
+| `_PERF_SQL` | Build-window subquery — filters rows server-side instead of full table scan |
+| History query | Batched `IN` clause — one query for all failing test names |
+| `failure_txt` transfer | `LEFT(failure_txt, 8192)` (MySQL) / `substring(..., 1, 8192)` (ClickHouse) in `_FAILURES_SQL` |
+| JIRA enrichment | Parallel HTTP requests via `ThreadPoolExecutor` (`parallel_requests` config key, default 8) |
+| AI analysis | Parallel LLM calls via `ThreadPoolExecutor` (`parallel_requests` config key, default 4) |
+| Phase replay | Each phase writes `<build>.data.json`; re-running a phase skips all earlier work |
+| Early exit | `_collect_failures()` returns `[]` immediately when no failures are found for the build |
+
+### Parallelism design
+
+**Collection phase:** `ThreadPoolExecutor` in `generate_report.py` runs all
+enabled tools concurrently. Wall time equals the slowest tool, not their sum.
+When both MySQL and ClickHouse are enabled, optimise the slower tool first.
+
+**JIRA phase:** `JiraEnricher.enrich()` uses `ThreadPoolExecutor` with
+`parallel_requests` (default 8). Each `_find_tickets()` call is pure HTTP I/O
+with no shared mutable state. JIRA Cloud allows ~10 req/s per IP; 8 workers is
+safe. Dry-run mode stays sequential so print lines are not interleaved.
+
+**AI phase:** `AIAnalyser.enrich()` uses `ThreadPoolExecutor` with
+`parallel_requests` (default 4). All `save_fn` calls (partial saves to disk)
+are serialised under a `threading.Lock` so concurrent threads never write a
+corrupted file. Dry-run mode stays sequential.
+
+**Thread-safety rule:** any new enricher that uses `ThreadPoolExecutor` must
+hold a `threading.Lock` around every cross-thread state mutation (counters,
+`save_fn` calls, shared dicts). Never mutate `report_data` outside the lock.
+
+### Config knobs for speed
+
+These `config.json` keys trade report detail for speed without any code change:
+
+| Section | Key | Default | Effect of lowering |
+|---|---|---|---|
+| `mysql` / `clickhouse` | `history_limit` | 7 | Fewer rows in `history_query_s` (the typical bottleneck) |
+| `mysql` / `clickhouse` | `perf_history_limit` | 8 | Narrower build window in `perf_query_s` |
+| `jira` | `parallel_requests` | 8 | Fewer concurrent JIRA HTTP calls |
+| `jira` | `skip_if_present` | true | Skip test cases already enriched in `.data.json` |
+| `ai` | `parallel_requests` | 4 | Fewer concurrent LLM calls (tune to your API tier's RPM limit) |
+| `ai` | `skip_if_present` | true | Skip cases that already have `ai_analysis.text` |
+
+### Truncation constants
+
+| File | Location | Limit | Rationale |
+|---|---|---|---|
+| `datasources/tool_mysql.py` | `_FAILURES_SQL` — `LEFT(failure_txt, 8192)` | 8 KB | Covers any real stack trace; reduces wire transfer |
+| `datasources/tool_clickhouse.py` | `_FAILURES_SQL` — `substring(failure_txt, 1, 8192)` | 8 KB | Same |
+| `ai_analyser.py` | `build_prompt()` — `text[:2000]` | 2 000 chars | LLMs cannot usefully read more of a stack trace |
+| `ai_analyser.py` | `_load_file()` — `content[:4000]` | 4 000 chars | Context file size cap |
+
+To change a limit, edit the constant in the relevant file. Do not add config
+keys for truncation limits — they are implementation constants, not user tuning.
 
 ---
 

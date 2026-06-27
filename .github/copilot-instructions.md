@@ -242,7 +242,7 @@ numbers or task names in comments.
 pytest tests/ -v --tb=short
 ```
 
-All tests must pass before committing. Current count: 173 tests, ~0.6 s.
+All tests must pass before committing.
 
 ### Test structure
 
@@ -407,6 +407,53 @@ document the finding as a human-DBA recommendation — do not attempt to create 
 | `history_query_s` high | Config: lower `history_limit`; or rewrite with date range if builds are numeric |
 | `failures_query_s` high | Rewrite: ensure `WHERE build = %s` can use an existing index |
 | `connect_s` high | Not fixable from code; document for ops team |
+
+---
+
+## Pipeline efficiency
+
+### Implemented optimisations
+
+| Area | Technique |
+|---|---|
+| Tool collection | Parallel `ThreadPoolExecutor` — wall time = slowest tool |
+| `_PERF_SQL` | Build-window subquery filters rows server-side |
+| History query | Batched `IN` clause — one query for all failing test names |
+| `failure_txt` transfer | `LEFT(failure_txt, 8192)` (MySQL) / `substring(..., 1, 8192)` (ClickHouse) |
+| JIRA enrichment | Parallel HTTP via `ThreadPoolExecutor` (`parallel_requests`, default 8) |
+| AI analysis | Parallel LLM calls via `ThreadPoolExecutor` (`parallel_requests`, default 4) |
+| Phase replay | `.data.json` written after each phase; re-runs skip earlier phases |
+
+### Parallelism rules
+
+- **JIRA `enrich()`:** uses `ThreadPoolExecutor`. Dry-run mode stays sequential
+  so print lines are not interleaved. `parallel_requests=8` is safe under JIRA
+  Cloud's 10 req/s rate limit.
+- **AI `enrich()`:** uses `ThreadPoolExecutor`. All `save_fn` calls are
+  serialised under `threading.Lock` — never call `save_fn` outside the lock.
+  Tune `parallel_requests` to your API tier's RPM limit.
+- **New enrichers** that use `ThreadPoolExecutor` must hold a `threading.Lock`
+  around every cross-thread state write. Never mutate `report_data` outside
+  the lock.
+
+### Truncation constants (do not make these config keys)
+
+| File | Constant | Value | Purpose |
+|---|---|---|---|
+| `datasources/tool_mysql.py` | `LEFT(failure_txt, 8192)` in `_FAILURES_SQL` | 8 KB | Reduce wire transfer |
+| `datasources/tool_clickhouse.py` | `substring(failure_txt, 1, 8192)` in `_FAILURES_SQL` | 8 KB | Same |
+| `ai_analyser.py` | `text[:2000]` in `build_prompt()` | 2 000 chars | Prompt token reduction |
+| `ai_analyser.py` | `content[:4000]` in `_load_file()` | 4 000 chars | Context file cap |
+
+### Config knobs (no code change needed)
+
+| Section | Key | Default | Lowering reduces |
+|---|---|---|---|
+| `mysql` / `clickhouse` | `history_limit` | 7 | `history_query_s` |
+| `mysql` / `clickhouse` | `perf_history_limit` | 8 | `perf_query_s` |
+| `jira` | `parallel_requests` | 8 | Concurrent HTTP calls |
+| `ai` | `parallel_requests` | 4 | Concurrent LLM calls |
+| `jira` / `ai` | `skip_if_present` | true | Re-enrichment of already-done cases |
 
 ---
 
