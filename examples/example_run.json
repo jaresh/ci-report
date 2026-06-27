@@ -1,0 +1,58 @@
+{
+  "_comment": "Run config for generate_report.py --config mode.",
+
+  "build": {
+    "number":    "1247",
+    "branch":    "feature/chunked-upload",
+    "commit":    "a3f9d12",
+    "ref_build": "1244",
+    "duration":  "18m 43s",
+    "badges": {
+      "passed":  34,
+      "failed":  0,
+      "skipped": 3,
+      "metrics": 18
+    }
+  },
+
+  "collection": {
+    "enabled": true,
+    "tools": [
+      {
+        "name":    "junit_xml",
+        "enabled": true,
+        "config": {
+          "report_glob":   "examples/junit_current.xml",
+          "history_dir":   "examples/junit_history/",
+          "history_limit": 7,
+          "scenario_jira": "PIPE-123",
+          "config_label":  "docker-arm64 · Linux · agent-01",
+          "jira_base_url": "https://jira.example.com/browse/",
+          "task_base_url": "https://ci.example.com/jobs/1247/tasks/",
+          "log_base_url":  "https://ci.example.com/jobs/1247/logs/"
+        }
+      },
+      {
+        "name":    "metrics_json",
+        "enabled": true,
+        "config": {
+          "files": [
+            "examples/metrics_arm64.json",
+            "examples/metrics_curl.json"
+          ]
+        }
+      }
+    ]
+  },
+
+  "ai": {
+    "enabled":         true,
+    "model":           "claude-sonnet-4-6",
+    "context_file":    "examples/context.txt",
+    "log_dir":         "examples/logs/",
+    "max_tokens":      600,
+    "delay_between":   0.5,
+    "skip_if_present": true,
+    "_api_key_note":   "Set ANTHROPIC_API_KEY env var before running"
+  }
+}

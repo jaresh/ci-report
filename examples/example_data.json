@@ -1,0 +1,296 @@
+{
+  "build": {
+    "number": "1247",
+    "build_url": "https://ci.example.com/jobs/1247",
+    "branch": "feature/chunked-upload",
+    "branch_url": "https://github.com/example-org/example-repo/tree/feature/chunked-upload",
+    "commit": "a3f9d12",
+    "commit_url": "https://github.com/example-org/example-repo/commit/a3f9d12",
+    "ref_build": "1244",
+    "ref_build_url": "https://ci.example.com/jobs/1244",
+    "duration": "18m 43s",
+    "badges": {
+      "passed": 34,
+      "failed": 2,
+      "skipped": 3,
+      "metrics": 18
+    }
+  },
+
+  "failures": [
+    {
+      "scenario": "E2E Upload Pipeline",
+      "config": "docker-arm64 · Linux · agent-01",
+      "jira": "PIPE-123",
+      "jira_url": "https://jira.example.com/browse/PIPE-123",
+      "test_cases": [
+        {
+          "name": "Bearer token expiry at chunk boundary (fault injection)",
+          "duration": "18.1s",
+          "status": "fail",
+          "jira": "PIPE-458",
+          "jira_url": "https://jira.example.com/browse/PIPE-458",
+          "task_url": "https://ci.example.com/jobs/1247/tasks/38",
+          "log_url": "https://ci.example.com/jobs/1247/logs/pipe-458",
+          "history": [
+            {"build": "1240", "status": "pass", "duration": "29.8s"},
+            {"build": "1241", "status": "pass", "duration": "31.2s"},
+            {"build": "1242", "status": "pass", "duration": "30.5s"},
+            {"build": "1243", "status": "pass", "duration": "28.9s"},
+            {"build": "1244", "status": "pass", "duration": "30.1s"},
+            {"build": "1245", "status": "pass", "duration": "31.0s"},
+            {"build": "1246", "status": "pass", "duration": "29.7s"},
+            {"build": "1247", "status": "fail", "duration": "18.1s", "current": true}
+          ],
+          "ai_analysis": {
+            "text": "<strong>HTTP 403</strong> at chunk 7/8 (56 MB into final chunk). Root cause: <code>JFROG_CLI_TOKEN_REFRESH=true</code> missing from <strong>agent-01</strong> environment. Token issued at T+0 expired at T+18m. Variable present in ref build #1244 — regression introduced in last agent pool re-provision (<a href=\"https://jira.example.com/browse/PIPE-459\">PIPE-459</a>). Fix: add variable to <code>eu-west-1/agent-01.env</code> and re-run.",
+            "tag": "REGRESSION · HTTP 403 · agent-01 env",
+            "tag_type": "error"
+          }
+        }
+      ]
+    },
+
+    {
+      "scenario": "Checksum Deduplication",
+      "config": "k8s-pod · Linux · pool-eu-west-1",
+      "jira": "PIPE-310",
+      "jira_url": "https://jira.example.com/browse/PIPE-310",
+      "test_cases": [
+        {
+          "name": "Cross-repo dedup timeout under concurrent load",
+          "duration": "30.4s",
+          "status": "fail",
+          "jira": "PIPE-476",
+          "jira_url": "https://jira.example.com/browse/PIPE-476",
+          "task_url": "https://ci.example.com/jobs/1247/tasks/41",
+          "log_url": "https://ci.example.com/jobs/1247/logs/pipe-476",
+          "history": [
+            {"build": "1240", "status": "pass", "duration": "28.1s"},
+            {"build": "1241", "status": "pass", "duration": "27.8s"},
+            {"build": "1242", "status": "fail", "duration": "30.2s"},
+            {"build": "1243", "status": "pass", "duration": "28.4s"},
+            {"build": "1244", "status": "pass", "duration": "27.9s"},
+            {"build": "1245", "status": "pass", "duration": "28.1s"},
+            {"build": "1246", "status": "pass", "duration": "27.6s"},
+            {"build": "1247", "status": "fail", "duration": "30.4s", "current": true}
+          ],
+          "ai_analysis": {
+            "text": "Cross-repo dedup timed out at the <strong>30s threshold</strong> under concurrent k8s pod load. <code>artifactory.dedup.timeout</code> is set to 30s but request took 30.4s. Previous failure also in #1242 under similar load conditions. Recommendation: increase timeout to <code>45s</code> in <code>k8s-configmap.yaml</code> or add pod resource limit guards.",
+            "tag": "TIMEOUT · 30s threshold exceeded",
+            "tag_type": "error"
+          }
+        },
+        {
+          "name": "Dedup skips binary when SHA-256 collision detected (edge case)",
+          "duration": "0.2s",
+          "status": "error",
+          "jira": "PIPE-477",
+          "jira_url": "https://jira.example.com/browse/PIPE-477",
+          "task_url": "https://ci.example.com/jobs/1247/tasks/42",
+          "log_url": "https://ci.example.com/jobs/1247/logs/pipe-477",
+          "history": [
+            {"build": "1240", "status": "pass", "duration": "0.9s"},
+            {"build": "1241", "status": "pass", "duration": "0.8s"},
+            {"build": "1242", "status": "pass", "duration": "0.9s"},
+            {"build": "1243", "status": "pass", "duration": "0.8s"},
+            {"build": "1244", "status": "pass", "duration": "0.9s"},
+            {"build": "1245", "status": "pass", "duration": "0.9s"},
+            {"build": "1246", "status": "pass", "duration": "0.8s"},
+            {"build": "1247", "status": "error", "duration": "0.2s", "current": true}
+          ],
+          "ai_analysis": {
+            "text": "<strong>NullPointerException</strong> in <code>DeduplicationService.resolveCollision()</code> at line 412. Stack trace: <code>artifactory-core-7.71.3.jar</code>. This is a newly introduced code path in the <code>7.71.x</code> upgrade — method assumes non-null <code>checksumEntity</code> but the k8s pod received a malformed response from the remote node during high load. Filed upstream as <a href=\"https://jfrog.atlassian.net/browse/RTFACT-12345\">RTFACT-12345</a>.",
+            "tag": "ERROR · NullPointerException · upstream bug",
+            "tag_type": "error"
+          }
+        }
+      ]
+    },
+
+    {
+      "scenario": "Multipart Upload — Network Resilience",
+      "config": "docker-amd64 · Linux · agent-02",
+      "jira": "PIPE-400",
+      "jira_url": "https://jira.example.com/browse/PIPE-400",
+      "test_cases": [
+        {
+          "name": "Upload survives 60s network partition mid-transfer",
+          "duration": "3m 12s",
+          "status": "timeout",
+          "jira": "PIPE-481",
+          "jira_url": "https://jira.example.com/browse/PIPE-481",
+          "task_url": "https://ci.example.com/jobs/1247/tasks/55",
+          "log_url": "https://ci.example.com/jobs/1247/logs/pipe-481",
+          "history": [
+            {"build": "1240", "status": "pass",    "duration": "2m 18s"},
+            {"build": "1241", "status": "pass",    "duration": "2m 22s"},
+            {"build": "1242", "status": "pass",    "duration": "2m 19s"},
+            {"build": "1243", "status": "skip",    "duration": "—"},
+            {"build": "1244", "status": "pass",    "duration": "2m 21s"},
+            {"build": "1245", "status": "pass",    "duration": "2m 20s"},
+            {"build": "1246", "status": "pass",    "duration": "2m 23s"},
+            {"build": "1247", "status": "timeout", "duration": "3m 12s", "current": true}
+          ],
+          "ai_analysis": {
+            "text": "Test timed out at <strong>3 minutes</strong> (threshold: 3m). The 60s partition was injected at T+42s but CLI did not resume after reconnect — backoff timer reached <code>MAX_RETRY_WAIT=120s</code> without completing the chunk. CLI version <strong>2.52.0</strong> introduced a regression in exponential backoff cap. Workaround: set <code>JFROG_CLI_UPLOAD_RETRY_MAX_WAIT=60</code> in agent environment.",
+            "tag": "TIMEOUT · backoff regression in CLI 2.52.0",
+            "tag_type": "error"
+          }
+        }
+      ]
+    }
+  ],
+
+  "performance": [
+    {
+      "model": "JFrog CLI 2.x · Linux arm64",
+      "summary_note": "Best throughput in 8-build window; workers auto-scaled to pool max",
+      "summary_chips": [
+        {"label": "throughput", "value": "87.3 MB/s", "css_class": "green"},
+        {"label": "latency p95", "value": "234 ms",   "css_class": "green"}
+      ],
+      "metrics": [
+        {
+          "name": "Upload Throughput",
+          "unit": "MB/s",
+          "direction": "higher_better",
+          "current": 87.3,
+          "reference": 82.9,
+          "history_values": [74.0, 77.1, 78.4, 79.2, 81.0, 83.3, 85.1, 87.3],
+          "history_builds": ["1240", "1241", "1242", "1243", "1244", "1245", "1246", "1247"]
+        },
+        {
+          "name": "Upload Latency p95",
+          "unit": "ms",
+          "direction": "lower_better",
+          "current": 234,
+          "reference": 255,
+          "history_values": [268, 262, 255, 258, 249, 244, 241, 234],
+          "history_builds": ["1240", "1241", "1242", "1243", "1244", "1245", "1246", "1247"]
+        },
+        {
+          "name": "Checksum Computation",
+          "unit": "ms",
+          "direction": "lower_better",
+          "current": 45,
+          "reference": 47,
+          "history_values": [51, 49, 48, 47, 46, 47, 46, 45],
+          "history_builds": ["1240", "1241", "1242", "1243", "1244", "1245", "1246", "1247"]
+        },
+        {
+          "name": "Retry Count",
+          "unit": "retries",
+          "direction": "lower_better",
+          "current": 0,
+          "reference": 0,
+          "history_values": [2, 1, 1, 0, 1, 0, 0, 0],
+          "history_builds": ["1240", "1241", "1242", "1243", "1244", "1245", "1246", "1247"]
+        },
+        {
+          "name": "CPU Utilisation (avg)",
+          "unit": "%",
+          "direction": "lower_better",
+          "current": 34,
+          "reference": 38,
+          "history_values": [42, 40, 39, 38, 37, 36, 35, 34],
+          "history_builds": ["1240", "1241", "1242", "1243", "1244", "1245", "1246", "1247"]
+        }
+      ]
+    },
+
+    {
+      "model": "Curl Fallback · Linux amd64",
+      "summary_note": "Latency spike and conn-reuse drop — possible TCP keep-alive config change",
+      "summary_chips": [
+        {"label": "throughput", "value": "72.1 MB/s", "css_class": "red"},
+        {"label": "latency p95", "value": "312 ms",   "css_class": "red"}
+      ],
+      "metrics": [
+        {
+          "name": "Upload Throughput",
+          "unit": "MB/s",
+          "direction": "higher_better",
+          "current": 72.1,
+          "reference": 74.9,
+          "history_values": [76.0, 75.1, 74.3, 74.0, 73.2, 74.1, 73.0, 72.1],
+          "history_builds": ["1240", "1241", "1242", "1243", "1244", "1245", "1246", "1247"]
+        },
+        {
+          "name": "Upload Latency p95",
+          "unit": "ms",
+          "direction": "lower_better",
+          "current": 312,
+          "reference": 286,
+          "history_values": [280, 282, 285, 283, 286, 288, 290, 312],
+          "history_builds": ["1240", "1241", "1242", "1243", "1244", "1245", "1246", "1247"]
+        },
+        {
+          "name": "Connection Reuse Rate",
+          "unit": "%",
+          "direction": "higher_better",
+          "current": 61.4,
+          "reference": 70.0,
+          "history_values": [72.0, 71.3, 72.1, 70.4, 71.0, 70.2, 70.0, 61.4],
+          "history_builds": ["1240", "1241", "1242", "1243", "1244", "1245", "1246", "1247"]
+        },
+        {
+          "name": "Retry Count",
+          "unit": "retries",
+          "direction": "lower_better",
+          "current": 3,
+          "reference": 1,
+          "history_values": [1, 1, 0, 1, 1, 1, 2, 3],
+          "history_builds": ["1240", "1241", "1242", "1243", "1244", "1245", "1246", "1247"]
+        }
+      ]
+    },
+
+    {
+      "model": "JFrog CLI 2.x · Windows bare-metal",
+      "summary_note": "Stable — Windows 5-thread pool cap limits throughput vs Linux arm64",
+      "summary_chips": [
+        {"label": "throughput", "value": "70.2 MB/s", "css_class": ""},
+        {"label": "latency p95", "value": "291 ms",   "css_class": ""}
+      ],
+      "metrics": [
+        {
+          "name": "Upload Throughput",
+          "unit": "MB/s",
+          "direction": "higher_better",
+          "current": 70.2,
+          "reference": 70.0,
+          "history_values": [68.1, 69.3, 70.0, 69.2, 70.1, 71.0, 70.2, 70.2],
+          "history_builds": ["1240", "1241", "1242", "1243", "1244", "1245", "1246", "1247"]
+        },
+        {
+          "name": "Upload Latency p95",
+          "unit": "ms",
+          "direction": "lower_better",
+          "current": 291,
+          "reference": 290,
+          "history_values": [294, 290, 291, 288, 292, 290, 289, 291],
+          "history_builds": ["1240", "1241", "1242", "1243", "1244", "1245", "1246", "1247"]
+        },
+        {
+          "name": "CPU Utilisation (avg)",
+          "unit": "%",
+          "direction": "lower_better",
+          "current": 46,
+          "reference": 46,
+          "history_values": [48, 47, 48, 46, 47, 46, 47, 46],
+          "history_builds": ["1240", "1241", "1242", "1243", "1244", "1245", "1246", "1247"]
+        },
+        {
+          "name": "TLS Handshake Time",
+          "unit": "ms",
+          "direction": "lower_better",
+          "current": 42,
+          "reference": 44,
+          "history_values": [48, 46, 45, 44, 43, 44, 43, 42],
+          "history_builds": ["1240", "1241", "1242", "1243", "1244", "1245", "1246", "1247"]
+        }
+      ]
+    }
+  ]
+}

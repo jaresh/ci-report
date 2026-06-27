@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+.env
+
+# Generated report outputs
+*.data.json
+sample_data.json
+# Numbered build reports and root-level sample output; keep examples/sample_report.html
+[0-9]*.html
+sample_report.html
+
+# Credentials
+.env.local
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Docker
+.dockerignore

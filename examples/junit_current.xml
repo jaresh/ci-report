@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="E2E Upload Pipeline" tests="5" failures="1" errors="0" skipped="1" time="182.4">
+
+    <testcase name="Upload 500 MB via JFrog CLI multipart" classname="test.e2e.upload" time="38.4"/>
+
+    <testcase name="Bearer token expiry at chunk boundary [PIPE-458]" classname="test.e2e.upload" time="18.1">
+      <failure message="HTTP 403 Forbidden at chunk 7/8" type="AssertionError">
+HTTP 403 Forbidden
+  at chunk: 7 / 8
+  bytes transferred: 56 MB of 64 MB
+  token age at failure: 18m 02s
+  hint: JFROG_CLI_TOKEN_REFRESH env var missing from agent-01
+      </failure>
+    </testcase>
+
+    <testcase name="Retry on 30% packet-loss fault injection [PIPE-452]" classname="test.e2e.upload" time="44.6"/>
+
+    <testcase name="Resume after SIGKILL at chunk 7 [PIPE-462]" classname="test.e2e.upload" time="105.4"/>
+
+    <testcase name="Cross-repo dedup timeout under load [PIPE-476]" classname="test.e2e.upload" time="30.4">
+      <failure message="DeduplicationTimeout: exceeded 30s threshold" type="TimeoutError">
+DeduplicationTimeout: request took 30.4s, threshold is 30s
+  at: DeduplicationService.resolveCollision() line 412
+  context: k8s pod under concurrent load (3 parallel uploads)
+  previous failure: build #1242 (same root cause)
+      </failure>
+    </testcase>
+
+  </testsuite>
+</testsuites>

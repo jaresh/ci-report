@@ -1,0 +1,65 @@
+{
+  "_comment": "Project config for generate_report.py. Use {build} as a placeholder for the build name passed on the CLI.",
+
+  "credentials": {
+    "_comment": "Env var names only — actual values belong in the environment, never in this file. Run --check-credentials to validate before a pipeline run.",
+    "JIRA_API_TOKEN":    "JIRA service-account API token (base64 email:token for Cloud, Bearer for Server)",
+    "ANTHROPIC_API_KEY": "Anthropic API key for AI analysis phase"
+  },
+
+  "base": {
+    "build_url":     "https://ci.example.com/jobs/{build}",
+    "branch":        "feature/chunked-upload",
+    "branch_url":    "",
+    "commit":        "",
+    "commit_url":    "",
+    "ref_build":     "1244",
+    "ref_build_url": "https://ci.example.com/jobs/1244",
+    "duration":      "",
+    "badges": {
+      "passed":  0,
+      "skipped": 0,
+      "metrics": 18
+    }
+  },
+
+  "junit_xml": {
+    "report_glob":   "examples/junit_current.xml",
+    "history_dir":   "examples/junit_history/",
+    "history_limit": 7,
+    "scenario_jira": "PIPE-123",
+    "config_label":  "docker-arm64 · Linux · agent-01",
+    "jira_base_url": "https://jira.example.com/browse/",
+    "task_base_url": "https://ci.example.com/jobs/{build}/tasks/",
+    "log_base_url":  "https://ci.example.com/jobs/{build}/logs/"
+  },
+
+  "metrics_json": {
+    "files": [
+      "examples/metrics_arm64.json",
+      "examples/metrics_curl.json"
+    ]
+  },
+
+  "jira": {
+    "base_url":       "https://your-org.atlassian.net",
+    "email":          "ci-bot@your-org.com",
+    "api_token_env":  "JIRA_API_TOKEN",
+    "project_keys":   ["PIPE", "INFRA"],
+    "max_related":    4,
+    "search_terms":   3,
+    "skip_if_present": true,
+    "timeout":        10,
+    "_note":          "Set JIRA_API_TOKEN env var before using --jira"
+  },
+
+  "ai": {
+    "model":           "claude-sonnet-4-6",
+    "context_file":    "examples/context.txt",
+    "log_dir":         "examples/logs/",
+    "max_tokens":      600,
+    "delay_between":   0.5,
+    "skip_if_present": true,
+    "_note":           "Set ANTHROPIC_API_KEY env var before using --ai"
+  }
+}

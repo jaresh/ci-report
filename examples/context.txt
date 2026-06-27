@@ -1,0 +1,42 @@
+# System Context: Artifact Upload Pipeline
+# This file is injected into every AI failure analysis prompt.
+# Keep it up to date with your infrastructure so the AI can make specific diagnoses.
+
+## Infrastructure
+- Artifactory: 7.71.3, self-hosted on eu-west-1 (3-node cluster)
+- Upload agents
+    agent-01  docker-arm64  Linux 6.1  last re-provisioned 2024-01-14
+    agent-02  docker-amd64  Linux 6.1  last re-provisioned 2024-01-14
+    agent-03  bare-metal    Windows 2022 Server
+- k8s pod resource limits: 2 vCPU / 4 GB RAM  (pool-eu-west-1)
+
+## Upload tool
+- Primary:  JFrog CLI 2.52.0 — detected by `command -v jf`
+- Fallback: curl (used when jf absent from PATH, e.g. alpine:3.19 images)
+- Chunk size: 64 MB  |  workers: up to 8 (Linux), up to 5 (Windows NTFS cap)
+- Token lifetime: JWT tokens expire after 18 minutes (JWT_EXPIRY=1080s)
+- Required env vars
+    JFROG_CLI_TOKEN_REFRESH=true   enables mid-upload token auto-refresh
+    ARTIFACTORY_URL                base URL for all API calls
+    ARTIFACTORY_TOKEN              Bearer token (rotated on agent provision)
+
+## Artifactory configuration
+- Dedup operation timeout: 30 s  (artifactory.dedup.timeout in k8s-configmap.yaml)
+- Cross-repo dedup: binary layer shared between repos on SHA-256 match
+- Connection reuse: CURL_KEEPALIVE_IDLE=60  (set in agent Docker image)
+- CLI log level: INFO  (logs written to ~/.jfrog/logs/jfrog-cli.log)
+
+## Repository layout
+- libs-snapshot-local  CI artifact uploads (this pipeline)
+- libs-release-local   Promoted releases (dedup source for cross-repo copies)
+
+## Reference builds
+- #1244  All green, 45 s avg duration — use as regression baseline
+- #1242  Cross-repo dedup timeout observed (first occurrence, under k8s load)
+
+## Known issues / recent changes
+- agent-01 and agent-02 re-provisioned 2024-01-14; post-provision checklist
+  does NOT automatically copy env vars from the old image — manual step required
+- JFrog CLI 2.52.0 introduced a regression in exponential backoff cap for
+  upload retries (MAX_RETRY_WAIT now defaults to 120 s instead of 60 s)
+- k8s pods frequently hit CPU throttling when 3+ concurrent uploads are active
